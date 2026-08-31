@@ -1,0 +1,17 @@
+.app {
+  min-height: 100vh;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  align-items: center;
+  text-align: center;
+}
+
+.app h1 {
+  font-size: 3rem;
+  margin-bottom: 0.5rem;
+}
+
+.app p {
+  font-size: 1.2rem;
+}
