@@ -255,6 +255,8 @@ function App() {
 
       if (!currentUser) {
         setAuthPage("login");
+      } else {
+        setPage("dashboard");
       }
     });
 
