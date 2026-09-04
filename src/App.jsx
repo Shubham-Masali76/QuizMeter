@@ -331,6 +331,7 @@ function App() {
         description,
         userId: user.uid,
         createdAt: new Date(),
+        status: "draft",
       });
 
       console.log("Quiz created with ID:", docRef.id);
@@ -343,6 +344,38 @@ function App() {
     } catch (error) {
       console.error("Error creating quiz:", error);
       setMessage("Something went wrong while creating the quiz!");
+
+      setTimeout(() => {
+        setMessage("");
+      }, 3000);
+    }
+  };
+
+  const handleHostQuiz = async () => {
+    if (questions.length === 0) {
+      setMessage("Please add at least one question before hosting the quiz!");
+
+      setTimeout(() => {
+        setMessage("");
+      }, 3000);
+
+      return;
+    }
+
+    try {
+      await updateDoc(doc(db, "quizzes", quizId), {
+        status: "waiting",
+      });
+
+      setMessage("Quiz is now waiting for participants!");
+
+      setTimeout(() => {
+        setMessage("");
+      }, 3000);
+    } catch (error) {
+      console.error("Error hosting quiz:", error);
+
+      setMessage("Something went wrong while hosting the quiz!");
 
       setTimeout(() => {
         setMessage("");
@@ -642,6 +675,10 @@ function App() {
                 Manage Questions ({questions.length})
               </button>
 
+              <button className="primary-btn" onClick={handleHostQuiz}>
+                Host Quiz
+              </button>
+
               <input
                 type="text"
                 placeholder="Enter your question"
@@ -733,6 +770,15 @@ function App() {
                       <p>{quiz.description}</p>
 
                       <span className="edit-text">Click to edit →</span>
+                      <span className={`quiz-status ${quiz.status || "draft"}`}>
+                        {quiz.status === "waiting"
+                          ? "🟡 Waiting"
+                          : quiz.status === "live"
+                            ? "🟢 Live"
+                            : quiz.status === "finished"
+                              ? "⚫ Finished"
+                              : "📝 Draft"}
+                      </span>
                     </div>
                   ))}
                 </div>
