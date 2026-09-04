@@ -78,7 +78,85 @@ function Toast({ message }) {
   );
 }
 
-function AuthPage({ authPage, setAuthPage, handleLogin, handleSignup }) {
+function RoleSelection({ onSelectRole }) {
+  return (
+    <div className="role-page">
+      <div className="role-selection-container">
+        <div className="role-logo">QuizMeter</div>
+        <h1>Welcome to QuizMeter</h1>
+        <p className="role-subtitle">Choose how you would like to continue:</p>
+
+        <div className="role-cards-grid">
+          <div
+            className="role-card host-card"
+            onClick={() => onSelectRole("host")}
+          >
+            <div className="role-icon">👨‍🏫</div>
+            <h2>Host</h2>
+            <p>Create, manage, and host live quizzes for your audience.</p>
+            <button
+              type="button"
+              className="primary-btn role-btn"
+              onClick={(e) => {
+                e.stopPropagation();
+                onSelectRole("host");
+              }}
+            >
+              Continue as Host →
+            </button>
+          </div>
+
+          <div
+            className="role-card participant-card"
+            onClick={() => onSelectRole("participant")}
+          >
+            <div className="role-icon">👤</div>
+            <h2>Participant</h2>
+            <p>Join and play live quizzes with a code. No login required.</p>
+            <button
+              type="button"
+              className="secondary-btn role-btn"
+              onClick={(e) => {
+                e.stopPropagation();
+                onSelectRole("participant");
+              }}
+            >
+              Continue as Participant →
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function ParticipantPlaceholder({ onBack }) {
+  return (
+    <div className="role-page">
+      <div className="participant-placeholder-card">
+        <div className="role-logo">QuizMeter</div>
+        <div className="placeholder-icon">👤</div>
+        <h1>Participant Mode</h1>
+        <p className="placeholder-subtitle">Live Quizzes will appear here.</p>
+        <button
+          type="button"
+          className="secondary-btn placeholder-back-btn"
+          onClick={onBack}
+        >
+          ← Back to Role Selection
+        </button>
+      </div>
+    </div>
+  );
+}
+
+function AuthPage({
+  authPage,
+  setAuthPage,
+  handleLogin,
+  handleSignup,
+  onBack,
+}) {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
@@ -139,6 +217,11 @@ function AuthPage({ authPage, setAuthPage, handleLogin, handleSignup }) {
   return (
     <div className="auth-page">
       <div className="auth-card">
+        {onBack && (
+          <button type="button" className="auth-back-btn" onClick={onBack}>
+            ← Back to Role Selection
+          </button>
+        )}
         <div className="auth-logo">QuizMeter</div>
 
         <h1>{authPage === "login" ? "Welcome Back" : "Create Account"}</h1>
@@ -261,6 +344,7 @@ const generateUniqueQuizCode = async () => {
 function App() {
   const [user, setUser] = useState(null);
   const [authLoading, setAuthLoading] = useState(true);
+  const [selectedRole, setSelectedRole] = useState(null);
   const [authPage, setAuthPage] = useState("login");
   const [page, setPage] = useState("dashboard");
   const [title, setTitle] = useState("");
@@ -288,6 +372,7 @@ function App() {
       if (!currentUser) {
         setAuthPage("login");
       } else {
+        setSelectedRole("host");
         setPage("dashboard");
       }
     });
@@ -315,6 +400,7 @@ function App() {
     try {
       await signInWithEmailAndPassword(auth, email, password);
 
+      setSelectedRole("host");
       setPage("dashboard");
 
       setMessage("Logged in successfully!");
@@ -332,6 +418,7 @@ function App() {
     try {
       await signOut(auth);
 
+      setSelectedRole(null);
       setPage("login");
       setMessage("Logged out successfully!");
 
@@ -590,6 +677,14 @@ function App() {
     );
   }
 
+  if (!selectedRole) {
+    return <RoleSelection onSelectRole={setSelectedRole} />;
+  }
+
+  if (selectedRole === "participant") {
+    return <ParticipantPlaceholder onBack={() => setSelectedRole(null)} />;
+  }
+
   if (!user) {
     return (
       <AuthPage
@@ -597,6 +692,7 @@ function App() {
         setAuthPage={setAuthPage}
         handleLogin={handleLogin}
         handleSignup={handleSignup}
+        onBack={() => setSelectedRole(null)}
       />
     );
   }
