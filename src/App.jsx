@@ -245,7 +245,7 @@ const generateUniqueQuizCode = async () => {
 
     const codeQuery = query(
       collection(db, "quizzes"),
-      where("quizCode", "==", code)
+      where("quizCode", "==", code),
     );
 
     const querySnapshot = await getDocs(codeQuery);
@@ -402,7 +402,6 @@ function App() {
         status: "waiting",
       });
 
-      setMessage("Quiz is now waiting for participants!");
       setMessage(`Quiz is now waiting for participants! Code: ${quizCode}`);
 
       setTimeout(() => {
@@ -805,16 +804,20 @@ function App() {
                       <h3>{quiz.title}</h3>
                       <p>{quiz.description}</p>
 
-                      <span className="edit-text">Click to edit →</span>
-                      <span className={`quiz-status ${quiz.status || "draft"}`}>
-                        {quiz.status === "waiting"
-                          ? "🟡 Waiting"
-                          : quiz.status === "live"
-                            ? "🟢 Live"
-                            : quiz.status === "finished"
-                              ? "⚫ Finished"
-                              : "📝 Draft"}
-                      </span>
+                      <div className="quiz-item-footer">
+                        <span className="edit-text">Click to edit →</span>
+                        <span
+                          className={`quiz-status ${quiz.status || "draft"}`}
+                        >
+                          {quiz.status === "waiting"
+                            ? "🟡 Waiting"
+                            : quiz.status === "live"
+                              ? "🟢 Live"
+                              : quiz.status === "finished"
+                                ? "⚫ Finished"
+                                : "📝 Draft"}
+                        </span>
+                      </div>
                     </div>
                   ))}
                 </div>
