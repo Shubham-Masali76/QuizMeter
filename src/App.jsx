@@ -226,6 +226,38 @@ function AuthPage({ authPage, setAuthPage, handleLogin, handleSignup }) {
   );
 }
 
+const generateQuizCode = () => {
+  const characters = "ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789";
+  let code = "";
+  for (let i = 0; i < 6; i++) {
+    const randomIndex = Math.floor(Math.random() * characters.length);
+    code += characters[randomIndex];
+  }
+  return code;
+};
+
+const generateUniqueQuizCode = async () => {
+  let isUnique = false;
+  let code = "";
+
+  while (!isUnique) {
+    code = generateQuizCode();
+
+    const codeQuery = query(
+      collection(db, "quizzes"),
+      where("quizCode", "==", code)
+    );
+
+    const querySnapshot = await getDocs(codeQuery);
+
+    if (querySnapshot.empty) {
+      isUnique = true;
+    }
+  }
+
+  return code;
+};
+
 function App() {
   const [user, setUser] = useState(null);
   const [authLoading, setAuthLoading] = useState(true);
@@ -363,11 +395,15 @@ function App() {
     }
 
     try {
+      const quizCode = await generateUniqueQuizCode();
+
       await updateDoc(doc(db, "quizzes", quizId), {
+        quizCode,
         status: "waiting",
       });
 
       setMessage("Quiz is now waiting for participants!");
+      setMessage(`Quiz is now waiting for participants! Code: ${quizCode}`);
 
       setTimeout(() => {
         setMessage("");
