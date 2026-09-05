@@ -132,7 +132,7 @@ function RoleSelection({ onSelectRole }) {
   );
 }
 
-function JoinQuizScreen({ selectedQuiz, onBack }) {
+function JoinQuizScreen({ selectedQuiz, onBack, onJoined }) {
   const [code, setCode] = useState("");
   const [name, setName] = useState("");
   const [message, setMessage] = useState("");
@@ -203,11 +203,30 @@ function JoinQuizScreen({ selectedQuiz, onBack }) {
         return;
       }
 
-      showMessage("Quiz verified! Participant lobby will be implemented next.");
+      // Register temporary participant presence in the quiz's participants subcollection
+      const participantRef = await addDoc(
+        collection(db, "quizzes", selectedQuiz.id, "participants"),
+        {
+          name: trimmedName,
+          joinedAt: new Date(),
+        },
+      );
+
+      if (onJoined) {
+        onJoined({
+          quizId: selectedQuiz.id,
+          quizTitle: selectedQuiz.title || quizData.title,
+          participantId: participantRef.id,
+          participantName: trimmedName,
+        });
+      }
     } catch (err) {
-      console.error("Error verifying quiz code:", err);
+      console.error(
+        "Error verifying quiz code or registering participant:",
+        err,
+      );
       showMessage(
-        "Something went wrong while verifying the quiz. Please try again.",
+        "Something went wrong while joining the quiz. Please try again.",
       );
     } finally {
       setIsVerifying(false);
@@ -278,11 +297,228 @@ function JoinQuizScreen({ selectedQuiz, onBack }) {
   );
 }
 
+function ParticipantLobby({
+  quizId,
+  initialTitle,
+  participantId,
+  participantName,
+  onLeave,
+}) {
+  const [participantsCount, setParticipantsCount] = useState(1);
+  const [quizData, setQuizData] = useState({
+    title: initialTitle || "Quiz Lobby",
+    status: "waiting",
+  });
+  const [loading, setLoading] = useState(Boolean(quizId));
+  const [error, setError] = useState(quizId ? "" : "No quiz selected.");
+  const [isLeaving, setIsLeaving] = useState(false);
+
+  useEffect(() => {
+    if (!quizId) {
+      return;
+    }
+
+    const quizDocRef = doc(db, "quizzes", quizId);
+    const unsubQuiz = onSnapshot(
+      quizDocRef,
+      (docSnap) => {
+        if (docSnap.exists()) {
+          const data = docSnap.data();
+          setQuizData({
+            title: data.title || initialTitle || "Quiz Lobby",
+            status: data.status || "waiting",
+          });
+          setLoading(false);
+        } else {
+          setError("This quiz is no longer available.");
+          setLoading(false);
+        }
+      },
+      (err) => {
+        console.error("Error listening to quiz doc in lobby:", err);
+        setError("Failed to load quiz details.");
+        setLoading(false);
+      },
+    );
+
+    const participantsRef = collection(db, "quizzes", quizId, "participants");
+    const unsubParticipants = onSnapshot(
+      participantsRef,
+      (snapshot) => {
+        setParticipantsCount(snapshot.size);
+      },
+      (err) => {
+        console.error("Error listening to participants in lobby:", err);
+      },
+    );
+
+    const handleBeforeUnload = () => {
+      if (participantId && quizId) {
+        deleteDoc(
+          doc(db, "quizzes", quizId, "participants", participantId),
+        ).catch(() => {});
+      }
+    };
+
+    window.addEventListener("beforeunload", handleBeforeUnload);
+
+    return () => {
+      unsubQuiz();
+      unsubParticipants();
+      window.removeEventListener("beforeunload", handleBeforeUnload);
+    };
+  }, [quizId, participantId, initialTitle]);
+
+  const handleLeaveLobby = async () => {
+    if (isLeaving) return;
+    setIsLeaving(true);
+    try {
+      if (participantId && quizId) {
+        await deleteDoc(
+          doc(db, "quizzes", quizId, "participants", participantId),
+        );
+      }
+    } catch (err) {
+      console.error("Error leaving lobby:", err);
+    } finally {
+      setIsLeaving(false);
+      onLeave();
+    }
+  };
+
+  if (loading) {
+    return (
+      <div className="participant-lobby-page">
+        <div className="participant-lobby-card">
+          <div className="role-logo">QuizMeter</div>
+          <h2>Connecting to Lobby...</h2>
+          <p className="lobby-loading-text">
+            Joining {initialTitle || "quiz"}...
+          </p>
+        </div>
+      </div>
+    );
+  }
+
+  if (error) {
+    return (
+      <div className="participant-lobby-page">
+        <div className="participant-lobby-card">
+          <div className="role-logo">QuizMeter</div>
+          <h2>Quiz Unavailable</h2>
+          <p className="lobby-error-text">{error}</p>
+          <button
+            type="button"
+            className="primary-btn lobby-back-btn"
+            onClick={handleLeaveLobby}
+          >
+            ← Back to Live Quizzes
+          </button>
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <div className="participant-lobby-page">
+      <header className="participant-lobby-header">
+        <div className="participant-logo">QuizMeter</div>
+        <button
+          type="button"
+          className="secondary-btn lobby-top-leave-btn"
+          onClick={handleLeaveLobby}
+          disabled={isLeaving}
+        >
+          {isLeaving ? "Leaving..." : "← Leave Quiz"}
+        </button>
+      </header>
+
+      <main className="participant-lobby-main">
+        <div className="participant-lobby-card">
+          <div className="lobby-status-badge-wrap">
+            <span className={`quiz-status ${quizData.status}`}>
+              {quizData.status === "waiting"
+                ? "🟡 Waiting for Host"
+                : quizData.status === "live"
+                  ? "🟢 Quiz is Live"
+                  : quizData.status === "finished"
+                    ? "⚫ Finished"
+                    : "📝 Draft"}
+            </span>
+          </div>
+
+          <h1 className="lobby-quiz-title">{quizData.title}</h1>
+
+          <div className="lobby-participant-info">
+            <span className="lobby-participant-label">You joined as:</span>
+            <span className="lobby-participant-name">{participantName}</span>
+          </div>
+
+          <div className="lobby-counter-card">
+            <div className="lobby-counter-number">{participantsCount}</div>
+            <div className="lobby-counter-label">
+              {participantsCount === 1
+                ? "Participant in Lobby"
+                : "Participants in Lobby"}
+            </div>
+          </div>
+
+          {quizData.status === "waiting" && (
+            <div className="lobby-message-card waiting-state">
+              <div className="lobby-message-icon">⏳</div>
+              <h3>Waiting for the host to start the quiz...</h3>
+              <p>
+                You are in! As soon as the host starts the quiz, questions will
+                appear here.
+              </p>
+            </div>
+          )}
+
+          {quizData.status === "live" && (
+            <div className="lobby-message-card live-state">
+              <div className="lobby-message-icon">🚀</div>
+              <h3>Quiz is starting!</h3>
+              <p>The host has started the quiz. Please get ready!</p>
+            </div>
+          )}
+
+          {quizData.status === "finished" && (
+            <div className="lobby-message-card finished-state">
+              <div className="lobby-message-icon">⚫</div>
+              <h3>This quiz has finished</h3>
+              <p>The host has ended this quiz session.</p>
+              <button
+                type="button"
+                className="primary-btn"
+                onClick={handleLeaveLobby}
+              >
+                Back to Live Quizzes
+              </button>
+            </div>
+          )}
+
+          <div className="lobby-footer-action">
+            <button
+              type="button"
+              className="lobby-exit-link"
+              onClick={handleLeaveLobby}
+              disabled={isLeaving}
+            >
+              Leave Lobby
+            </button>
+          </div>
+        </div>
+      </main>
+    </div>
+  );
+}
+
 function ParticipantLiveQuizzes({ onBack }) {
   const [liveQuizzes, setLiveQuizzes] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
   const [selectedQuiz, setSelectedQuiz] = useState(null);
+  const [joinedSession, setJoinedSession] = useState(null);
 
   const fetchQuizzes = async () => {
     setLoading(true);
@@ -357,11 +593,27 @@ function ParticipantLiveQuizzes({ onBack }) {
     setSelectedQuiz(quiz);
   };
 
+  if (joinedSession) {
+    return (
+      <ParticipantLobby
+        quizId={joinedSession.quizId}
+        initialTitle={joinedSession.quizTitle}
+        participantId={joinedSession.participantId}
+        participantName={joinedSession.participantName}
+        onLeave={() => {
+          setJoinedSession(null);
+          setSelectedQuiz(null);
+        }}
+      />
+    );
+  }
+
   if (selectedQuiz) {
     return (
       <JoinQuizScreen
         selectedQuiz={selectedQuiz}
         onBack={() => setSelectedQuiz(null)}
+        onJoined={(session) => setJoinedSession(session)}
       />
     );
   }

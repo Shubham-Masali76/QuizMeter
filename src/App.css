@@ -1521,6 +1521,194 @@ button:hover {
 }
 
 /* =========================
+   PARTICIPANT LOBBY
+   ========================= */
+
+.participant-lobby-page {
+  min-height: 100vh;
+  background: #f8fafc;
+  display: flex;
+  flex-direction: column;
+}
+
+.participant-lobby-header {
+  height: 70px;
+  padding: 0 8%;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  background: white;
+  border-bottom: 1px solid #e2e8f0;
+}
+
+.lobby-top-leave-btn {
+  background: white;
+  color: #ef4444;
+  border: 1px solid #fca5a5;
+  font-size: 0.9rem;
+  font-weight: 600;
+  padding: 8px 16px;
+  border-radius: 8px;
+  cursor: pointer;
+  transition: 0.2s;
+}
+
+.lobby-top-leave-btn:hover {
+  background: #fef2f2;
+  border-color: #ef4444;
+  color: #b91c1c;
+  transform: translateY(-1px);
+}
+
+.participant-lobby-main {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 40px 20px;
+}
+
+.participant-lobby-card {
+  background: white;
+  border-radius: 16px;
+  padding: 36px 32px;
+  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.06);
+  width: 100%;
+  max-width: 560px;
+  text-align: center;
+}
+
+.lobby-status-badge-wrap {
+  display: inline-flex;
+  justify-content: center;
+  margin-bottom: 16px;
+}
+
+.lobby-quiz-title {
+  font-size: 1.85rem;
+  font-weight: 700;
+  color: #111827;
+  margin-bottom: 14px;
+  line-height: 1.3;
+}
+
+.lobby-participant-info {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  background: #f1f5f9;
+  padding: 8px 18px;
+  border-radius: 20px;
+  margin-bottom: 24px;
+  font-size: 0.95rem;
+}
+
+.lobby-participant-label {
+  color: #64748b;
+  font-weight: 500;
+}
+
+.lobby-participant-name {
+  color: #1e293b;
+  font-weight: 700;
+}
+
+.lobby-counter-card {
+  background: linear-gradient(135deg, #eef2ff 0%, #f5f3ff 100%);
+  border: 1px solid #e0e7ff;
+  border-radius: 14px;
+  padding: 24px 20px;
+  margin-bottom: 24px;
+}
+
+.lobby-counter-number {
+  font-size: 3.2rem;
+  font-weight: 800;
+  color: #4338ca;
+  line-height: 1.1;
+  margin-bottom: 4px;
+}
+
+.lobby-counter-label {
+  font-size: 0.95rem;
+  font-weight: 600;
+  color: #6366f1;
+  text-transform: uppercase;
+  letter-spacing: 1px;
+}
+
+.lobby-message-card {
+  border-radius: 12px;
+  padding: 20px;
+  margin-bottom: 20px;
+  text-align: center;
+}
+
+.lobby-message-card.waiting-state {
+  background: #fefce8;
+  border: 1px solid #fef08a;
+  color: #854d0e;
+}
+
+.lobby-message-card.live-state {
+  background: #ecfdf5;
+  border: 1px solid #a7f3d0;
+  color: #065f46;
+}
+
+.lobby-message-card.finished-state {
+  background: #f8fafc;
+  border: 1px solid #e2e8f0;
+  color: #475569;
+}
+
+.lobby-message-icon {
+  font-size: 2rem;
+  margin-bottom: 8px;
+}
+
+.lobby-message-card h3 {
+  font-size: 1.15rem;
+  font-weight: 700;
+  margin-bottom: 6px;
+}
+
+.lobby-message-card p {
+  font-size: 0.95rem;
+  opacity: 0.9;
+}
+
+.lobby-footer-action {
+  margin-top: 10px;
+}
+
+.lobby-exit-link {
+  background: transparent;
+  border: none;
+  color: #64748b;
+  font-size: 0.95rem;
+  font-weight: 500;
+  cursor: pointer;
+  text-decoration: underline;
+  transition: 0.2s;
+  padding: 6px;
+}
+
+.lobby-exit-link:hover {
+  color: #ef4444;
+}
+
+.lobby-loading-text,
+.lobby-error-text {
+  margin: 14px 0 20px;
+  color: #64748b;
+}
+
+.lobby-back-btn {
+  margin-top: 10px;
+}
+
+/* =========================
    HOST WAITING ROOM
    ========================= */
 
