@@ -130,11 +130,157 @@ function RoleSelection({ onSelectRole }) {
   );
 }
 
+function JoinQuizScreen({ selectedQuiz, onBack }) {
+  const [code, setCode] = useState("");
+  const [name, setName] = useState("");
+  const [message, setMessage] = useState("");
+  const [isVerifying, setIsVerifying] = useState(false);
+
+  const showMessage = (msg) => {
+    setMessage(msg);
+    setTimeout(() => {
+      setMessage("");
+    }, 3000);
+  };
+
+  const handleJoinSubmit = async (e) => {
+    e.preventDefault();
+
+    const normalizedCode = code.trim().toUpperCase();
+    const trimmedName = name.trim();
+
+    if (!normalizedCode) {
+      showMessage("Please enter the quiz code.");
+      return;
+    }
+
+    const codeRegex = /^[A-Z0-9]{6}$/;
+    if (!codeRegex.test(normalizedCode)) {
+      showMessage("Quiz code must be 6 characters using A-Z and 0-9.");
+      return;
+    }
+
+    if (!trimmedName) {
+      showMessage("Please enter your name.");
+      return;
+    }
+
+    if (trimmedName.length > 30) {
+      showMessage("Name cannot exceed 30 characters.");
+      return;
+    }
+
+    setIsVerifying(true);
+
+    try {
+      const q = query(
+        collection(db, "quizzes"),
+        where("quizCode", "==", normalizedCode),
+      );
+
+      const querySnapshot = await getDocs(q);
+
+      if (querySnapshot.empty) {
+        showMessage("Quiz not found. Please check the quiz code.");
+        setIsVerifying(false);
+        return;
+      }
+
+      const quizDoc = querySnapshot.docs[0];
+      const quizData = quizDoc.data();
+
+      if (quizData.status !== "waiting" && quizData.status !== "live") {
+        showMessage("This quiz is no longer available.");
+        setIsVerifying(false);
+        return;
+      }
+
+      if (quizDoc.id !== selectedQuiz.id) {
+        showMessage("The quiz code does not match the selected quiz.");
+        setIsVerifying(false);
+        return;
+      }
+
+      showMessage("Quiz verified! Participant lobby will be implemented next.");
+    } catch (err) {
+      console.error("Error verifying quiz code:", err);
+      showMessage(
+        "Something went wrong while verifying the quiz. Please try again.",
+      );
+    } finally {
+      setIsVerifying(false);
+    }
+  };
+
+  return (
+    <div className="join-quiz-page">
+      <div className="join-quiz-card">
+        <div className="role-logo">QuizMeter</div>
+        <h1>Join Quiz</h1>
+        <p className="join-quiz-subtitle">
+          Enter the code and your name to join this challenge
+        </p>
+
+        <div className="join-quiz-info-box">
+          <h3>{selectedQuiz.title}</h3>
+          {selectedQuiz.description && <p>{selectedQuiz.description}</p>}
+        </div>
+
+        <form onSubmit={handleJoinSubmit}>
+          <div className="join-quiz-field">
+            <label>Quiz Code</label>
+            <input
+              type="text"
+              placeholder="e.g. R19UNG"
+              value={code}
+              maxLength={6}
+              onChange={(e) => setCode(e.target.value.toUpperCase())}
+              className="quiz-code-input"
+              disabled={isVerifying}
+            />
+          </div>
+
+          <div className="join-quiz-field">
+            <label>Your Name</label>
+            <input
+              type="text"
+              placeholder="Enter your name"
+              value={name}
+              maxLength={30}
+              onChange={(e) => setName(e.target.value)}
+              disabled={isVerifying}
+            />
+          </div>
+
+          <button
+            type="submit"
+            className="primary-btn join-quiz-submit-btn"
+            disabled={isVerifying}
+          >
+            {isVerifying ? "Verifying..." : "Join Quiz →"}
+          </button>
+
+          <button
+            type="button"
+            className="join-quiz-back-btn"
+            onClick={onBack}
+            disabled={isVerifying}
+          >
+            ← Back to Live Quizzes
+          </button>
+        </form>
+      </div>
+
+      <Toast message={message} />
+    </div>
+  );
+}
+
 function ParticipantLiveQuizzes({ onBack }) {
   const [liveQuizzes, setLiveQuizzes] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
-  const [infoMessage, setInfoMessage] = useState("");
+  const [selectedQuiz, setSelectedQuiz] = useState(null);
 
   const fetchQuizzes = async () => {
     setLoading(true);
@@ -205,13 +351,18 @@ function ParticipantLiveQuizzes({ onBack }) {
     };
   }, []);
 
-  const handleJoinQuiz = () => {
-    setInfoMessage("Join Quiz will be implemented next.");
-
-    setTimeout(() => {
-      setInfoMessage("");
-    }, 3000);
+  const handleJoinQuiz = (quiz) => {
+    setSelectedQuiz(quiz);
   };
+
+  if (selectedQuiz) {
+    return (
+      <JoinQuizScreen
+        selectedQuiz={selectedQuiz}
+        onBack={() => setSelectedQuiz(null)}
+      />
+    );
+  }
 
   return (
     <div className="participant-page">
@@ -301,8 +452,6 @@ function ParticipantLiveQuizzes({ onBack }) {
           </div>
         )}
       </main>
-
-      <Toast message={infoMessage} />
     </div>
   );
 }

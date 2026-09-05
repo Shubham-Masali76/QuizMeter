@@ -1130,6 +1130,7 @@ button:hover {
 }
 
 .role-logo {
+  text-align: center;
   font-size: 2.2rem;
   font-weight: 700;
   color: #4f46e5;
@@ -1399,4 +1400,122 @@ button:hover {
   color: #4f46e5;
   transform: translateX(-3px);
   background: transparent;
+}
+
+/* =========================
+   PARTICIPANT JOIN QUIZ SCREEN
+   ========================= */
+
+.join-quiz-page {
+  min-height: 100vh;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 30px;
+  background: #f7f7f7;
+}
+
+.join-quiz-card {
+  width: 100%;
+  max-width: 460px;
+  background: white;
+  padding: 40px;
+  border-radius: 18px;
+  border: 1px solid #e5e7eb;
+  box-shadow: 0 15px 40px rgba(0, 0, 0, 0.08);
+}
+
+.join-quiz-card h1 {
+  text-align: center;
+  font-size: 1.85rem;
+  color: #1f2937;
+  margin-bottom: 6px;
+}
+
+.join-quiz-subtitle {
+  text-align: center;
+  color: #6b7280;
+  font-size: 0.95rem;
+  margin-bottom: 24px;
+}
+
+.join-quiz-info-box {
+  background: #f8fafc;
+  border: 1px solid #e2e8f0;
+  border-radius: 12px;
+  padding: 16px;
+  margin-bottom: 24px;
+}
+
+.join-quiz-info-box h3 {
+  font-size: 1.15rem;
+  font-weight: 700;
+  color: #1f2937;
+  margin-bottom: 4px;
+}
+
+.join-quiz-info-box p {
+  font-size: 0.95rem;
+  color: #64748b;
+  line-height: 1.4;
+}
+
+.join-quiz-field {
+  margin-bottom: 20px;
+}
+
+.join-quiz-field label {
+  display: block;
+  margin-bottom: 8px;
+  font-weight: 600;
+  font-size: 0.95rem;
+  color: #374151;
+}
+
+.join-quiz-field input {
+  width: 100%;
+  padding: 13px 14px;
+  border: 1px solid #d1d5db;
+  border-radius: 9px;
+  font-size: 1rem;
+  font-family: inherit;
+  transition: 0.2s;
+}
+
+.join-quiz-field input:focus {
+  outline: none;
+  border-color: #4f46e5;
+  box-shadow: 0 0 0 3px rgba(79, 70, 229, 0.1);
+}
+
+.quiz-code-input {
+  letter-spacing: 2px;
+  font-weight: 600;
+  text-transform: uppercase;
+}
+
+.join-quiz-submit-btn {
+  width: 100%;
+  margin-top: 6px;
+}
+
+.join-quiz-back-btn {
+  width: 100%;
+  margin-top: 14px;
+  background: transparent;
+  color: #6b7280;
+  font-size: 0.95rem;
+  font-weight: 500;
+  border: none;
+  cursor: pointer;
+  text-align: center;
+  transition: 0.2s;
+  padding: 8px;
+}
+
+.join-quiz-back-btn:hover {
+  color: #4f46e5;
+  text-decoration: underline;
+  transform: none;
+  opacity: 1;
 }
