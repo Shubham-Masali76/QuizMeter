@@ -4,11 +4,13 @@ import {
   collection,
   addDoc,
   getDocs,
+  getDoc,
   updateDoc,
   deleteDoc,
   doc,
   query,
   where,
+  onSnapshot,
 } from "firebase/firestore";
 
 import {
@@ -647,6 +649,330 @@ const generateUniqueQuizCode = async () => {
   return code;
 };
 
+function HostWaitingRoom({
+  quizId,
+  initialTitle,
+  initialDescription,
+  initialCode,
+  setPage,
+  setQuizStatus,
+}) {
+  const [participants, setParticipants] = useState([]);
+  const [quizData, setQuizData] = useState({
+    title: initialTitle,
+    description: initialDescription,
+    quizCode: initialCode,
+    status: "waiting",
+  });
+  const [loading, setLoading] = useState(Boolean(quizId));
+  const [error, setError] = useState(quizId ? "" : "No quiz selected.");
+  const [showModal, setShowModal] = useState(false);
+  const [searchTerm, setSearchTerm] = useState("");
+  const [isStarting, setIsStarting] = useState(false);
+  const [copied, setCopied] = useState(false);
+  const [toastMessage, setToastMessage] = useState("");
+
+  const showToast = (msg) => {
+    setToastMessage(msg);
+    setTimeout(() => {
+      setToastMessage("");
+    }, 3500);
+  };
+
+  useEffect(() => {
+    if (!quizId) {
+      return;
+    }
+
+    const quizDocRef = doc(db, "quizzes", quizId);
+    const unsubQuiz = onSnapshot(
+      quizDocRef,
+      (docSnap) => {
+        if (docSnap.exists()) {
+          const data = docSnap.data();
+          setQuizData((prev) => ({
+            ...prev,
+            title: data.title || prev.title,
+            description: data.description || prev.description,
+            quizCode: data.quizCode || prev.quizCode,
+            status: data.status || prev.status,
+          }));
+          if (data.status && setQuizStatus) {
+            setQuizStatus(data.status);
+          }
+        } else {
+          setError("This quiz could not be found or was deleted.");
+        }
+      },
+      (err) => {
+        console.error("Error listening to quiz doc:", err);
+        setError("Failed to load quiz details.");
+      },
+    );
+
+    const participantsRef = collection(db, "quizzes", quizId, "participants");
+    const unsubParticipants = onSnapshot(
+      participantsRef,
+      (snapshot) => {
+        const list = snapshot.docs.map((d) => ({
+          id: d.id,
+          name: d.data().name || "Anonymous",
+          ...d.data(),
+        }));
+        setParticipants(list);
+        setLoading(false);
+      },
+      (err) => {
+        console.error("Error listening to participants:", err);
+        setError("Failed to load participants.");
+        setLoading(false);
+      },
+    );
+
+    return () => {
+      unsubQuiz();
+      unsubParticipants();
+    };
+  }, [quizId, setQuizStatus]);
+
+  const handleCopyCode = () => {
+    if (quizData.quizCode) {
+      navigator.clipboard.writeText(quizData.quizCode);
+      setCopied(true);
+      setTimeout(() => setCopied(false), 2000);
+    }
+  };
+
+  const handleStartQuiz = async () => {
+    if (quizData.status !== "waiting") {
+      showToast("Quiz can only be started when in waiting status.");
+      return;
+    }
+
+    if (participants.length === 0) {
+      showToast(
+        "Waiting for at least one participant to join before starting.",
+      );
+      return;
+    }
+
+    setIsStarting(true);
+    try {
+      await updateDoc(doc(db, "quizzes", quizId), {
+        status: "live",
+      });
+      if (setQuizStatus) {
+        setQuizStatus("live");
+      }
+
+      showToast(
+        "Quiz is now LIVE! Live quiz gameplay will be implemented next.",
+      );
+    } catch (err) {
+      console.error("Error starting quiz:", err);
+      showToast("Failed to start quiz. Please try again.");
+    } finally {
+      setIsStarting(false);
+    }
+  };
+
+  const filteredParticipants = participants.filter((p) =>
+    p.name.toLowerCase().includes(searchTerm.toLowerCase()),
+  );
+
+  if (loading) {
+    return (
+      <div className="waiting-room-page">
+        <div className="waiting-room-loading">
+          <h2>Loading Waiting Room...</h2>
+        </div>
+      </div>
+    );
+  }
+
+  if (error) {
+    return (
+      <div className="waiting-room-page">
+        <div className="waiting-room-error">
+          <p>{error}</p>
+          <button className="primary-btn" onClick={() => setPage("quizzes")}>
+            ← Back to My Quizzes
+          </button>
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <div className="waiting-room-page">
+      <div className="waiting-room-top-nav">
+        <button className="secondary-btn" onClick={() => setPage("editor")}>
+          ← Back to Quiz Editor
+        </button>
+        <button className="secondary-btn" onClick={() => setPage("quizzes")}>
+          My Quizzes
+        </button>
+      </div>
+
+      <div className="waiting-room-card">
+        <div className="waiting-room-header">
+          <h1>{quizData.title}</h1>
+          {quizData.description && <p>{quizData.description}</p>}
+          <div className="waiting-room-status-wrap">
+            <span className={`quiz-status ${quizData.status}`}>
+              {quizData.status === "waiting"
+                ? "🟡 Waiting for participants"
+                : quizData.status === "live"
+                  ? "🟢 Live"
+                  : quizData.status === "finished"
+                    ? "⚫ Finished"
+                    : "📝 Draft"}
+            </span>
+          </div>
+        </div>
+
+        <div className="waiting-room-code-card">
+          <span className="code-label">SHARE QUIZ CODE</span>
+          <span className="code-value">{quizData.quizCode || "------"}</span>
+          <button className="copy-code-btn" onClick={handleCopyCode}>
+            {copied ? "✓ Copied to Clipboard" : "📋 Copy Code"}
+          </button>
+        </div>
+
+        <div className="waiting-room-counter-card">
+          <div className="counter-number">{participants.length}</div>
+          <div className="counter-label">
+            {participants.length === 1
+              ? "Participant Joined"
+              : "Participants Joined"}
+          </div>
+        </div>
+
+        <div className="waiting-room-actions">
+          <button
+            className="secondary-btn view-participants-btn"
+            onClick={() => setShowModal(true)}
+          >
+            👥 View Participants ({participants.length})
+          </button>
+
+          <button
+            className={`primary-btn start-quiz-btn ${
+              quizData.status === "live" ? "is-live" : ""
+            }`}
+            onClick={handleStartQuiz}
+            disabled={
+              isStarting ||
+              quizData.status !== "waiting" ||
+              participants.length === 0
+            }
+            title={
+              participants.length === 0
+                ? "Waiting for at least one participant to join"
+                : ""
+            }
+          >
+            {isStarting
+              ? "Starting..."
+              : quizData.status === "live"
+                ? "🟢 Quiz is Live (Active)"
+                : "🚀 Start Quiz"}
+          </button>
+
+          {quizData.status === "waiting" && participants.length === 0 && (
+            <p className="waiting-participant-hint">
+              Waiting for at least one participant...
+            </p>
+          )}
+        </div>
+      </div>
+
+      {showModal && (
+        <div className="dialog-overlay" onClick={() => setShowModal(false)}>
+          <div
+            className="dialog-box participants-modal"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="modal-header">
+              <div>
+                <h2>Joined Participants</h2>
+                <p className="modal-subtitle">
+                  {participants.length}{" "}
+                  {participants.length === 1 ? "participant" : "participants"}{" "}
+                  in lobby
+                </p>
+              </div>
+              <button
+                className="modal-close-btn"
+                onClick={() => setShowModal(false)}
+              >
+                ✕
+              </button>
+            </div>
+
+            <div className="participant-search-box">
+              <span className="search-icon">🔍</span>
+              <input
+                type="text"
+                placeholder="Search participant name..."
+                value={searchTerm}
+                onChange={(e) => setSearchTerm(e.target.value)}
+              />
+              {searchTerm && (
+                <button
+                  className="clear-search"
+                  onClick={() => setSearchTerm("")}
+                >
+                  ✕
+                </button>
+              )}
+            </div>
+
+            <div className="participants-scroll-list">
+              {participants.length === 0 ? (
+                <div className="modal-empty-state">
+                  <p>No participants have joined yet.</p>
+                  <span>Share the quiz code above to let them join!</span>
+                </div>
+              ) : filteredParticipants.length === 0 ? (
+                <div className="modal-empty-state">
+                  <p>No participants match &quot;{searchTerm}&quot;</p>
+                </div>
+              ) : (
+                <ul className="participant-items-list">
+                  {filteredParticipants.map((participant, index) => (
+                    <li
+                      key={participant.id || index}
+                      className="participant-item-row"
+                    >
+                      <span className="participant-index">#{index + 1}</span>
+                      <span className="participant-name">
+                        {participant.name}
+                      </span>
+                      <span className="participant-dot">●</span>
+                    </li>
+                  ))}
+                </ul>
+              )}
+            </div>
+
+            <div className="modal-footer">
+              <button
+                className="primary-btn modal-done-btn"
+                onClick={() => setShowModal(false)}
+              >
+                Close
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      <Toast message={toastMessage} />
+    </div>
+  );
+}
+
 function App() {
   const [user, setUser] = useState(null);
   const [authLoading, setAuthLoading] = useState(true);
@@ -656,6 +982,8 @@ function App() {
   const [title, setTitle] = useState("");
   const [description, setDescription] = useState("");
   const [quizId, setQuizId] = useState("");
+  const [quizCode, setQuizCode] = useState("");
+  const [quizStatus, setQuizStatus] = useState("draft");
   const [question, setQuestion] = useState("");
   const [option1, setOption1] = useState("");
   const [option2, setOption2] = useState("");
@@ -761,6 +1089,8 @@ function App() {
 
       console.log("Quiz created with ID:", docRef.id);
       setQuizId(docRef.id);
+      setQuizCode("");
+      setQuizStatus("draft");
       setPage("editor");
       // alert("Quiz created successfully!");
 
@@ -788,14 +1118,25 @@ function App() {
     }
 
     try {
-      const quizCode = await generateUniqueQuizCode();
+      let codeToUse = quizCode;
+      if (!codeToUse) {
+        const quizDocSnap = await getDoc(doc(db, "quizzes", quizId));
+        if (quizDocSnap.exists() && quizDocSnap.data().quizCode) {
+          codeToUse = quizDocSnap.data().quizCode;
+        } else {
+          codeToUse = await generateUniqueQuizCode();
+        }
+      }
 
       await updateDoc(doc(db, "quizzes", quizId), {
-        quizCode,
+        quizCode: codeToUse,
         status: "waiting",
       });
 
-      setMessage(`Quiz is now waiting for participants! Code: ${quizCode}`);
+      setQuizCode(codeToUse);
+      setQuizStatus("waiting");
+      setPage("host-waiting-room");
+      setMessage(`Quiz is now waiting for participants! Code: ${codeToUse}`);
 
       setTimeout(() => {
         setMessage("");
@@ -1100,6 +1441,11 @@ function App() {
               <div className="quiz-info">
                 <h3>{title}</h3>
                 <p>{description}</p>
+                {quizCode && (
+                  <p className="quiz-code-info">
+                    Quiz Code: <strong>{quizCode}</strong>
+                  </p>
+                )}
               </div>
 
               <button
@@ -1111,6 +1457,15 @@ function App() {
               >
                 Manage Questions ({questions.length})
               </button>
+
+              {quizStatus === "waiting" && (
+                <button
+                  className="primary-btn waiting-room-direct-btn"
+                  onClick={() => setPage("host-waiting-room")}
+                >
+                  🎯 Enter Waiting Room →
+                </button>
+              )}
 
               <button className="primary-btn" onClick={handleHostQuiz}>
                 Host Quiz
@@ -1173,6 +1528,29 @@ function App() {
     );
   }
 
+  if (page === "host-waiting-room") {
+    return (
+      <div className="app">
+        <DashboardLayout
+          page={page}
+          setPage={setPage}
+          handleMyQuizzes={handleMyQuizzes}
+          handleLogout={handleLogout}
+        >
+          <HostWaitingRoom
+            quizId={quizId}
+            initialTitle={title}
+            initialDescription={description}
+            initialCode={quizCode}
+            setPage={setPage}
+            setQuizStatus={setQuizStatus}
+          />
+          <Toast message={message} />
+        </DashboardLayout>
+      </div>
+    );
+  }
+
   if (page === "quizzes") {
     return (
       <div className="app">
@@ -1199,6 +1577,8 @@ function App() {
                         setQuizId(quiz.id);
                         setTitle(quiz.title);
                         setDescription(quiz.description);
+                        setQuizCode(quiz.quizCode || "");
+                        setQuizStatus(quiz.status || "draft");
                         fetchQuestions(quiz.id);
                         setPage("editor");
                       }}
