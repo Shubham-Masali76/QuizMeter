@@ -1613,12 +1613,68 @@ button:hover {
   font-weight: 700;
 }
 
+.lobby-participant-avatar {
+  font-size: 1.4rem;
+  line-height: 1;
+}
+
 .lobby-counter-card {
   background: linear-gradient(135deg, #eef2ff 0%, #f5f3ff 100%);
   border: 1px solid #e0e7ff;
   border-radius: 14px;
   padding: 24px 20px;
   margin-bottom: 24px;
+}
+
+.lobby-participants-preview {
+  margin: 16px 0 24px;
+  text-align: left;
+  background: #f8fafc;
+  border: 1px solid #e2e8f0;
+  border-radius: 12px;
+  padding: 16px;
+}
+
+.lobby-participants-title {
+  font-size: 0.9rem;
+  color: #475569;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  margin-bottom: 12px;
+}
+
+.lobby-participants-simple-grid {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+}
+
+.lobby-participant-card {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 14px;
+  background: white;
+  border: 1px solid #cbd5e1;
+  border-radius: 10px;
+  font-size: 0.92rem;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.04);
+}
+
+.lobby-participant-card.is-current-user {
+  background: #eef2ff;
+  border-color: #818cf8;
+  font-weight: 600;
+}
+
+.participant-card-avatar {
+  font-size: 1.35rem;
+  line-height: 1;
+}
+
+.participant-card-name {
+  color: #1e293b;
 }
 
 .lobby-counter-number {
@@ -2034,6 +2090,12 @@ button:hover {
   font-weight: 700;
   color: #94a3b8;
   min-width: 32px;
+}
+
+.participant-avatar-icon {
+  font-size: 1.25rem;
+  line-height: 1;
+  margin-right: 4px;
 }
 
 .participant-name {

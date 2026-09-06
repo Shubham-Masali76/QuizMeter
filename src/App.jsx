@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useMemo } from "react";
 
 import {
   collection,
@@ -20,7 +20,16 @@ import {
   onAuthStateChanged,
 } from "firebase/auth";
 
-import { db, auth } from "./services/firebase";
+import {
+  ref as rtdbRef,
+  onValue as rtdbOnValue,
+  set as rtdbSet,
+  remove as rtdbRemove,
+  get as rtdbGet,
+  onDisconnect as rtdbOnDisconnect,
+} from "firebase/database";
+
+import { db, auth, rtdb } from "./services/firebase";
 
 import "./App.css";
 
@@ -132,6 +141,48 @@ function RoleSelection({ onSelectRole }) {
   );
 }
 
+const EMOJI_UNICODE_RANGES = [
+  [0x1f600, 0x1f637], // Smileys & emoticons
+  [0x1f638, 0x1f640], // Cat expressions
+  [0x1f648, 0x1f64a], // Monkeys
+  [0x1f400, 0x1f43c], // Animals
+  [0x1f980, 0x1f997], // Wildlife & creatures
+  [0x1f910, 0x1f92f], // Expressive faces
+  [0x1f331, 0x1f343], // Nature & plants
+  [0x1f345, 0x1f37f], // Food & drink
+  [0x1f3a0, 0x1f3c4], // Activities & sports
+  [0x1f680, 0x1f6c0], // Transport & space
+];
+
+const generateDynamicAvatar = (existingAvatars = new Set()) => {
+  const MAX_ATTEMPTS = 500;
+  for (let attempt = 0; attempt < MAX_ATTEMPTS; attempt++) {
+    const range =
+      EMOJI_UNICODE_RANGES[
+        Math.floor(Math.random() * EMOJI_UNICODE_RANGES.length)
+      ];
+    const codePoint =
+      Math.floor(Math.random() * (range[1] - range[0] + 1)) + range[0];
+    const candidate = String.fromCodePoint(codePoint);
+
+    if (!existingAvatars.has(candidate)) {
+      return candidate;
+    }
+  }
+
+  // If initial random attempts hit taken avatars, scan available ranges
+  for (const [start, end] of EMOJI_UNICODE_RANGES) {
+    for (let cp = start; cp <= end; cp++) {
+      const candidate = String.fromCodePoint(cp);
+      if (!existingAvatars.has(candidate)) {
+        return candidate;
+      }
+    }
+  }
+
+  throw new Error("Unable to generate a unique avatar for this lobby.");
+};
+
 function JoinQuizScreen({ selectedQuiz, onBack, onJoined }) {
   const [code, setCode] = useState("");
   const [name, setName] = useState("");
@@ -203,11 +254,54 @@ function JoinQuizScreen({ selectedQuiz, onBack, onJoined }) {
         return;
       }
 
+      // Fetch participant documents from Firestore
+      const participantsSnapshot = await getDocs(
+        collection(db, "quizzes", selectedQuiz.id, "participants"),
+      );
+
+      // Determine currently active participant IDs from RTDB so stale docs do not block avatars
+      const activeParticipantIds = new Set();
+      try {
+        const presenceSnap = await rtdbGet(
+          rtdbRef(rtdb, `presence/${selectedQuiz.id}`),
+        );
+        if (presenceSnap.exists()) {
+          const presenceData = presenceSnap.val() || {};
+          Object.keys(presenceData).forEach((pid) => {
+            if (
+              presenceData[pid] === true ||
+              presenceData[pid]?.state === "online"
+            ) {
+              activeParticipantIds.add(pid);
+            }
+          });
+        }
+      } catch (rtdbErr) {
+        console.warn(
+          "Could not read RTDB presence for avatar occupancy, falling back to Firestore only:",
+          rtdbErr,
+        );
+        participantsSnapshot.docs.forEach((doc) =>
+          activeParticipantIds.add(doc.id),
+        );
+      }
+
+      // Only avatars belonging to currently active participants are considered occupied
+      const existingAvatars = new Set(
+        participantsSnapshot.docs
+          .filter((doc) => activeParticipantIds.has(doc.id))
+          .map((doc) => doc.data().avatar)
+          .filter(Boolean),
+      );
+
+      const avatar = generateDynamicAvatar(existingAvatars);
+
       // Register temporary participant presence in the quiz's participants subcollection
       const participantRef = await addDoc(
         collection(db, "quizzes", selectedQuiz.id, "participants"),
         {
           name: trimmedName,
+          avatar,
           joinedAt: new Date(),
         },
       );
@@ -218,6 +312,7 @@ function JoinQuizScreen({ selectedQuiz, onBack, onJoined }) {
           quizTitle: selectedQuiz.title || quizData.title,
           participantId: participantRef.id,
           participantName: trimmedName,
+          participantAvatar: avatar,
         });
       }
     } catch (err) {
@@ -302,9 +397,11 @@ function ParticipantLobby({
   initialTitle,
   participantId,
   participantName,
+  initialAvatar,
   onLeave,
 }) {
-  const [participantsCount, setParticipantsCount] = useState(1);
+  const [participants, setParticipants] = useState([]);
+  const [presenceMap, setPresenceMap] = useState({});
   const [quizData, setQuizData] = useState({
     title: initialTitle || "Quiz Lobby",
     status: "waiting",
@@ -313,6 +410,71 @@ function ParticipantLobby({
   const [error, setError] = useState(quizId ? "" : "No quiz selected.");
   const [isLeaving, setIsLeaving] = useState(false);
 
+  // Active participants: Firestore docs filtered by RTDB presence === 'online'
+  const activeParticipants = useMemo(() => {
+    return participants.filter((p) => {
+      const pres = presenceMap[p.id];
+      return pres && (pres === true || pres.state === "online");
+    });
+  }, [participants, presenceMap]);
+
+  const participantsCount = activeParticipants.length;
+
+  // 1. Manage participant RTDB presence with onDisconnect() and reconnection handling
+  useEffect(() => {
+    if (!quizId || !participantId) {
+      return;
+    }
+
+    const presenceRef = rtdbRef(rtdb, `presence/${quizId}/${participantId}`);
+    const connectedRef = rtdbRef(rtdb, ".info/connected");
+
+    const unsubConnected = rtdbOnValue(connectedRef, async (snap) => {
+      if (snap.val() === true) {
+        try {
+          // Requirement 3: Register onDisconnect().remove() BEFORE setting online
+          await rtdbOnDisconnect(presenceRef).remove();
+
+          // Requirement 4: Set online only after onDisconnect registration succeeds
+          await rtdbSet(presenceRef, {
+            state: "online",
+            joinedAt: Date.now(),
+          });
+        } catch (err) {
+          console.error("Error establishing RTDB presence:", err);
+        }
+      }
+    });
+
+    return () => {
+      unsubConnected();
+    };
+  }, [quizId, participantId]);
+
+  // 2. Listen to RTDB presence for this quiz in real time
+  useEffect(() => {
+    if (!quizId) {
+      return;
+    }
+
+    const quizPresenceRef = rtdbRef(rtdb, `presence/${quizId}`);
+    const unsubPresence = rtdbOnValue(
+      quizPresenceRef,
+      (snapshot) => {
+        const val = snapshot.val();
+        setPresenceMap(val || {});
+      },
+      (err) => {
+        console.error("Error listening to RTDB presence in lobby:", err);
+      },
+    );
+
+    return () => {
+      unsubPresence();
+    };
+  }, [quizId]);
+
+  // 3. Listen to Firestore quiz details & participant documents
   useEffect(() => {
     if (!quizId) {
       return;
@@ -345,7 +507,13 @@ function ParticipantLobby({
     const unsubParticipants = onSnapshot(
       participantsRef,
       (snapshot) => {
-        setParticipantsCount(snapshot.size);
+        const list = snapshot.docs.map((d) => ({
+          id: d.id,
+          name: d.data().name || "Anonymous",
+          avatar: d.data().avatar || "",
+          joinedAt: d.data().joinedAt,
+        }));
+        setParticipants(list);
       },
       (err) => {
         console.error("Error listening to participants in lobby:", err);
@@ -353,6 +521,7 @@ function ParticipantLobby({
     );
 
     const handleBeforeUnload = () => {
+      // Best-effort optimization only. Not required for correctness.
       if (participantId && quizId) {
         deleteDoc(
           doc(db, "quizzes", quizId, "participants", participantId),
@@ -369,11 +538,69 @@ function ParticipantLobby({
     };
   }, [quizId, participantId, initialTitle]);
 
+  // 4. Duplicate avatar resolution among ACTIVE participants only
+  useEffect(() => {
+    const myDoc = activeParticipants.find((p) => p.id === participantId);
+    if (!myDoc || !myDoc.avatar) return;
+
+    const duplicates = activeParticipants.filter(
+      (p) => p.avatar === myDoc.avatar,
+    );
+    if (duplicates.length > 1) {
+      const sorted = [...duplicates].sort((a, b) => {
+        const timeA = a.joinedAt?.toMillis
+          ? a.joinedAt.toMillis()
+          : a.joinedAt
+            ? new Date(a.joinedAt).getTime()
+            : 0;
+        const timeB = b.joinedAt?.toMillis
+          ? b.joinedAt.toMillis()
+          : b.joinedAt
+            ? new Date(b.joinedAt).getTime()
+            : 0;
+        if (timeA !== timeB) return timeA - timeB;
+        return a.id.localeCompare(b.id);
+      });
+
+      if (sorted[0].id !== participantId) {
+        const allUsed = new Set(
+          activeParticipants.map((p) => p.avatar).filter(Boolean),
+        );
+        try {
+          const freshAvatar = generateDynamicAvatar(allUsed);
+          updateDoc(doc(db, "quizzes", quizId, "participants", participantId), {
+            avatar: freshAvatar,
+          }).catch((err) => {
+            console.error("Error resolving avatar collision:", err);
+          });
+        } catch (err) {
+          console.error("Error generating fresh avatar on collision:", err);
+        }
+      }
+    }
+  }, [activeParticipants, participantId, quizId]);
+
+  // 5. Explicit Leave handler: cancel onDisconnect, remove RTDB presence, delete Firestore doc
   const handleLeaveLobby = async () => {
     if (isLeaving) return;
     setIsLeaving(true);
     try {
       if (participantId && quizId) {
+        const presenceRef = rtdbRef(
+          rtdb,
+          `presence/${quizId}/${participantId}`,
+        );
+        try {
+          await rtdbOnDisconnect(presenceRef).cancel();
+        } catch {
+          // ignore if already disconnected
+        }
+        try {
+          await rtdbRemove(presenceRef);
+        } catch (e) {
+          console.error("Error removing RTDB presence on leave:", e);
+        }
+
         await deleteDoc(
           doc(db, "quizzes", quizId, "participants", participantId),
         );
@@ -385,6 +612,11 @@ function ParticipantLobby({
       onLeave();
     }
   };
+
+  const myDoc =
+    activeParticipants.find((p) => p.id === participantId) ||
+    participants.find((p) => p.id === participantId);
+  const myAvatar = myDoc?.avatar || initialAvatar || "";
 
   if (loading) {
     return (
@@ -450,6 +682,9 @@ function ParticipantLobby({
           <h1 className="lobby-quiz-title">{quizData.title}</h1>
 
           <div className="lobby-participant-info">
+            {myAvatar && (
+              <span className="lobby-participant-avatar">{myAvatar}</span>
+            )}
             <span className="lobby-participant-label">You joined as:</span>
             <span className="lobby-participant-name">{participantName}</span>
           </div>
@@ -460,6 +695,31 @@ function ParticipantLobby({
               {participantsCount === 1
                 ? "Participant in Lobby"
                 : "Participants in Lobby"}
+            </div>
+          </div>
+
+          {/* Simple avatar & name display for testing/verification (Phase 2) */}
+          <div className="lobby-participants-preview">
+            <h4 className="lobby-participants-title">
+              Joined Participants ({activeParticipants.length})
+            </h4>
+            <div className="lobby-participants-simple-grid">
+              {activeParticipants.map((p) => (
+                <div
+                  key={p.id}
+                  className={`lobby-participant-card ${
+                    p.id === participantId ? "is-current-user" : ""
+                  }`}
+                >
+                  <span className="participant-card-avatar">
+                    {p.avatar || "👤"}
+                  </span>
+                  <span className="participant-card-name">
+                    {p.name}
+                    {p.id === participantId && " (You)"}
+                  </span>
+                </div>
+              ))}
             </div>
           </div>
 
@@ -600,10 +860,21 @@ function ParticipantLiveQuizzes({ onBack }) {
         initialTitle={joinedSession.quizTitle}
         participantId={joinedSession.participantId}
         participantName={joinedSession.participantName}
+        initialAvatar={joinedSession.participantAvatar}
         onLeave={() => {
           setJoinedSession(null);
           setSelectedQuiz(null);
         }}
+      />
+    );
+  }
+
+  if (selectedQuiz) {
+    return (
+      <JoinQuizScreen
+        selectedQuiz={selectedQuiz}
+        onBack={() => setSelectedQuiz(null)}
+        onJoined={(session) => setJoinedSession(session)}
       />
     );
   }
@@ -910,6 +1181,7 @@ function HostWaitingRoom({
   setQuizStatus,
 }) {
   const [participants, setParticipants] = useState([]);
+  const [presenceMap, setPresenceMap] = useState({});
   const [quizData, setQuizData] = useState({
     title: initialTitle,
     description: initialDescription,
@@ -930,6 +1202,40 @@ function HostWaitingRoom({
       setToastMessage("");
     }, 3500);
   };
+
+  // Active participants: Firestore docs filtered by RTDB presence === 'online'
+  const activeParticipants = useMemo(() => {
+    return participants.filter((p) => {
+      const pres = presenceMap[p.id];
+      return pres && (pres === true || pres.state === "online");
+    });
+  }, [participants, presenceMap]);
+
+  // Real-time listener for active participants in RTDB
+  useEffect(() => {
+    if (!quizId) {
+      return;
+    }
+
+    const presenceRef = rtdbRef(rtdb, `presence/${quizId}`);
+    const unsubPresence = rtdbOnValue(
+      presenceRef,
+      (snapshot) => {
+        const val = snapshot.val();
+        setPresenceMap(val || {});
+      },
+      (err) => {
+        console.error(
+          "Error listening to RTDB presence in host waiting room:",
+          err,
+        );
+      },
+    );
+
+    return () => {
+      unsubPresence();
+    };
+  }, [quizId]);
 
   useEffect(() => {
     if (!quizId) {
@@ -1001,7 +1307,7 @@ function HostWaitingRoom({
       return;
     }
 
-    if (participants.length === 0) {
+    if (activeParticipants.length === 0) {
       showToast(
         "Waiting for at least one participant to join before starting.",
       );
@@ -1028,7 +1334,7 @@ function HostWaitingRoom({
     }
   };
 
-  const filteredParticipants = participants.filter((p) =>
+  const filteredParticipants = activeParticipants.filter((p) =>
     p.name.toLowerCase().includes(searchTerm.toLowerCase()),
   );
 
@@ -1092,9 +1398,9 @@ function HostWaitingRoom({
         </div>
 
         <div className="waiting-room-counter-card">
-          <div className="counter-number">{participants.length}</div>
+          <div className="counter-number">{activeParticipants.length}</div>
           <div className="counter-label">
-            {participants.length === 1
+            {activeParticipants.length === 1
               ? "Participant Joined"
               : "Participants Joined"}
           </div>
@@ -1105,7 +1411,7 @@ function HostWaitingRoom({
             className="secondary-btn view-participants-btn"
             onClick={() => setShowModal(true)}
           >
-            👥 View Participants ({participants.length})
+            👥 View Participants ({activeParticipants.length})
           </button>
 
           <button
@@ -1116,10 +1422,10 @@ function HostWaitingRoom({
             disabled={
               isStarting ||
               quizData.status !== "waiting" ||
-              participants.length === 0
+              activeParticipants.length === 0
             }
             title={
-              participants.length === 0
+              activeParticipants.length === 0
                 ? "Waiting for at least one participant to join"
                 : ""
             }
@@ -1131,7 +1437,7 @@ function HostWaitingRoom({
                 : "🚀 Start Quiz"}
           </button>
 
-          {quizData.status === "waiting" && participants.length === 0 && (
+          {quizData.status === "waiting" && activeParticipants.length === 0 && (
             <p className="waiting-participant-hint">
               Waiting for at least one participant...
             </p>
@@ -1149,8 +1455,10 @@ function HostWaitingRoom({
               <div>
                 <h2>Joined Participants</h2>
                 <p className="modal-subtitle">
-                  {participants.length}{" "}
-                  {participants.length === 1 ? "participant" : "participants"}{" "}
+                  {activeParticipants.length}{" "}
+                  {activeParticipants.length === 1
+                    ? "participant"
+                    : "participants"}{" "}
                   in lobby
                 </p>
               </div>
@@ -1181,7 +1489,7 @@ function HostWaitingRoom({
             </div>
 
             <div className="participants-scroll-list">
-              {participants.length === 0 ? (
+              {activeParticipants.length === 0 ? (
                 <div className="modal-empty-state">
                   <p>No participants have joined yet.</p>
                   <span>Share the quiz code above to let them join!</span>
@@ -1198,6 +1506,11 @@ function HostWaitingRoom({
                       className="participant-item-row"
                     >
                       <span className="participant-index">#{index + 1}</span>
+                      {participant.avatar && (
+                        <span className="participant-avatar-icon">
+                          {participant.avatar}
+                        </span>
+                      )}
                       <span className="participant-name">
                         {participant.name}
                       </span>
