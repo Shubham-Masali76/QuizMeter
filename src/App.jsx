@@ -1,4 +1,4 @@
-import { useState, useEffect, useMemo } from "react";
+import { useState, useEffect, useMemo, useRef } from "react";
 
 import {
   collection,
@@ -27,6 +27,8 @@ import {
   remove as rtdbRemove,
   get as rtdbGet,
   onDisconnect as rtdbOnDisconnect,
+  push as rtdbPush,
+  onChildAdded as rtdbOnChildAdded,
 } from "firebase/database";
 
 import { db, auth, rtdb } from "./services/firebase";
@@ -392,6 +394,220 @@ function JoinQuizScreen({ selectedQuiz, onBack, onJoined }) {
   );
 }
 
+// Deterministic 32-bit FNV-1a hash
+function hashString(str) {
+  let h = 2166136261;
+  for (let i = 0; i < str.length; i++) {
+    h ^= str.charCodeAt(i);
+    h = Math.imul(h, 16777619);
+  }
+  return Math.abs(h);
+}
+
+// Supported live reaction emojis
+const REACTION_EMOJIS = ["👍", "🔥", "😂", "😮", "👏"];
+
+// Ephemeral lobby reaction sender with owner-based cleanup
+async function sendLobbyReaction(quizId, participantId, emoji) {
+  if (!quizId || !participantId || !emoji) return;
+
+  try {
+    // 1. Create the unique reaction reference using push()
+    const reactionsRef = rtdbRef(rtdb, `reactions/${quizId}`);
+    const reactionRef = rtdbPush(reactionsRef);
+
+    // 2. Register disconnect cleanup BEFORE writing
+    await rtdbOnDisconnect(reactionRef).remove();
+
+    // 3. Write the reaction
+    await rtdbSet(reactionRef, {
+      emoji,
+      participantId,
+      createdAt: Date.now(),
+    });
+
+    // 4. Normal cleanup scheduled after ~4 seconds
+    setTimeout(async () => {
+      try {
+        await rtdbOnDisconnect(reactionRef)
+          .cancel()
+          .catch(() => {});
+        await rtdbRemove(reactionRef).catch(() => {});
+      } catch {
+        // safely handle cleanup failures
+      }
+    }, 4000);
+  } catch (err) {
+    console.error("Error sending lobby reaction:", err);
+  }
+}
+
+function ParticipantReactionBar({ quizId, participantId }) {
+  const [isCooldown, setIsCooldown] = useState(false);
+  const cooldownTimerRef = useRef(null);
+
+  useEffect(() => {
+    return () => {
+      if (cooldownTimerRef.current) {
+        clearTimeout(cooldownTimerRef.current);
+      }
+    };
+  }, []);
+
+  const handleSend = (emoji) => {
+    if (isCooldown || !quizId || !participantId) return;
+
+    // Trigger instant reaction send
+    sendLobbyReaction(quizId, participantId, emoji);
+
+    // Enter 2-second cooldown
+    setIsCooldown(true);
+    if (cooldownTimerRef.current) {
+      clearTimeout(cooldownTimerRef.current);
+    }
+    cooldownTimerRef.current = setTimeout(() => {
+      setIsCooldown(false);
+    }, 2000);
+  };
+
+  return (
+    <div className="lobby-reaction-bar-container">
+      <div className="lobby-reaction-bar-label">Send Reaction</div>
+      <div
+        className={`lobby-reaction-bar ${isCooldown ? "is-cooling" : ""}`}
+        role="group"
+        aria-label="Reaction buttons"
+      >
+        {REACTION_EMOJIS.map((emoji) => (
+          <button
+            key={emoji}
+            type="button"
+            className="reaction-btn"
+            onClick={() => handleSend(emoji)}
+            disabled={isCooldown}
+            title={isCooldown ? "Please wait 2 seconds..." : `Send ${emoji}`}
+            aria-label={`Send ${emoji} reaction`}
+          >
+            <span className="reaction-emoji">{emoji}</span>
+          </button>
+        ))}
+
+        {/* Subtle cooldown progress indicator */}
+        <div className="reaction-cooldown-track" aria-hidden="true">
+          <div className="reaction-cooldown-fill" />
+        </div>
+      </div>
+      {isCooldown && (
+        <span className="reaction-cooldown-hint" aria-live="polite">
+          Wait 2s...
+        </span>
+      )}
+    </div>
+  );
+}
+
+function LobbyReactionsOverlay({ quizId }) {
+  const [reactions, setReactions] = useState([]);
+  const timersRef = useRef(new Set());
+
+  useEffect(() => {
+    if (!quizId) return;
+
+    const currentTimers = timersRef.current;
+    const reactionsRef = rtdbRef(rtdb, `reactions/${quizId}`);
+
+    // Listen to individual reaction events using onChildAdded
+    const unsubscribe = rtdbOnChildAdded(
+      reactionsRef,
+      (snapshot) => {
+        const data = snapshot.val();
+        if (!data || !data.emoji) return;
+
+        const now = Date.now();
+        const createdAt =
+          typeof data.createdAt === "number" ? data.createdAt : now;
+
+        // ⏳ Stale Reaction Protection: ignore if older than 6000ms
+        if (now - createdAt > 6000) {
+          return;
+        }
+
+        const reactionId = snapshot.key;
+        const seed = reactionId || String(now + Math.random());
+
+        // Derive varied organic animation parameters using stable hash of seed
+        const startX = 12 + (hashString(seed + "_x") % 77); // 12% to 88%
+        const driftX = (hashString(seed + "_drift") % 51) - 25; // -25px to +25px
+        const variant = (hashString(seed + "_var") % 3) + 1; // 1, 2, or 3
+        const duration = parseFloat(
+          (2.7 + (hashString(seed + "_dur") % 8) / 10).toFixed(2),
+        ); // 2.7s to 3.4s
+        const scale = parseFloat(
+          (0.95 + (hashString(seed + "_scl") % 25) / 100).toFixed(2),
+        ); // 0.95 to 1.20
+        const rot = (hashString(seed + "_rot") % 25) - 12; // -12deg to +12deg
+
+        const newReaction = {
+          id: reactionId,
+          emoji: data.emoji,
+          startX,
+          driftX,
+          variant,
+          duration,
+          scale,
+          rot,
+        };
+
+        setReactions((prev) => {
+          if (prev.some((r) => r.id === reactionId)) return prev;
+          return [...prev, newReaction];
+        });
+
+        // Remove from local UI state after approximately 3.2 seconds
+        const timerId = setTimeout(() => {
+          currentTimers.delete(timerId);
+          setReactions((prev) => prev.filter((r) => r.id !== reactionId));
+        }, 3200);
+
+        currentTimers.add(timerId);
+      },
+      (err) => {
+        console.error("Error listening to lobby reactions:", err);
+      },
+    );
+
+    return () => {
+      if (typeof unsubscribe === "function") {
+        unsubscribe();
+      }
+      currentTimers.forEach((t) => clearTimeout(t));
+      currentTimers.clear();
+    };
+  }, [quizId]);
+
+  if (reactions.length === 0) return null;
+
+  return (
+    <div className="lobby-reactions-overlay" aria-hidden="true">
+      {reactions.map((r) => (
+        <div
+          key={r.id}
+          className={`floating-reaction variant-${r.variant}`}
+          style={{
+            left: `${r.startX}%`,
+            "--drift-x": `${r.driftX}px`,
+            "--reaction-scale": r.scale,
+            "--reaction-rot": `${r.rot}deg`,
+            animationDuration: `${r.duration}s`,
+          }}
+        >
+          <span className="floating-reaction-emoji">{r.emoji}</span>
+        </div>
+      ))}
+    </div>
+  );
+}
+
 function ParticipantLobby({
   quizId,
   initialTitle,
@@ -653,6 +869,7 @@ function ParticipantLobby({
 
   return (
     <div className="participant-lobby-page">
+      <LobbyReactionsOverlay quizId={quizId} />
       <header className="participant-lobby-header">
         <div className="participant-logo">QuizMeter</div>
         <button
@@ -698,30 +915,10 @@ function ParticipantLobby({
             </div>
           </div>
 
-          {/* Simple avatar & name display for testing/verification (Phase 2) */}
-          <div className="lobby-participants-preview">
-            <h4 className="lobby-participants-title">
-              Joined Participants ({activeParticipants.length})
-            </h4>
-            <div className="lobby-participants-simple-grid">
-              {activeParticipants.map((p) => (
-                <div
-                  key={p.id}
-                  className={`lobby-participant-card ${
-                    p.id === participantId ? "is-current-user" : ""
-                  }`}
-                >
-                  <span className="participant-card-avatar">
-                    {p.avatar || "👤"}
-                  </span>
-                  <span className="participant-card-name">
-                    {p.name}
-                    {p.id === participantId && " (You)"}
-                  </span>
-                </div>
-              ))}
-            </div>
-          </div>
+          <ParticipantReactionBar
+            quizId={quizId}
+            participantId={participantId}
+          />
 
           {quizData.status === "waiting" && (
             <div className="lobby-message-card waiting-state">
@@ -1172,6 +1369,256 @@ const generateUniqueQuizCode = async () => {
   return code;
 };
 
+// Generate organic position strictly from participantId as the primary stable seed
+function getStableParticipantPosition(participantId, attempt = 0) {
+  const seed =
+    attempt === 0 ? participantId : `${participantId}_step${attempt}`;
+  const hAngle = hashString(seed + "_angle");
+  const hRadius = hashString(seed + "_radius");
+  const hJitterX = hashString(seed + "_jx");
+  const hJitterY = hashString(seed + "_jy");
+
+  // Angle in radians distributed around 360 degrees
+  const angle = ((hAngle % 3600) / 3600) * 2 * Math.PI;
+
+  // Natural outward growth rings by attempt:
+  // Initial attempt clusters near center; subsequent attempts expand outward
+  const baseRadius = 5 + Math.min(attempt * 6, 32);
+  const spread = 9;
+  const rawR = (hRadius % 1000) / 1000;
+  const radius = baseRadius + Math.sqrt(rawR) * spread;
+
+  // Organic jitter offsets (-2% to +2%)
+  const jitterX = ((hJitterX % 40) - 20) / 10;
+  const jitterY = ((hJitterY % 40) - 20) / 10;
+
+  // Center is at (50%, 50%). Proportions adapted to stage
+  let x = 50 + radius * 1.35 * Math.cos(angle) + jitterX;
+  let y = 50 + radius * 0.95 * Math.sin(angle) + jitterY;
+
+  // Clamp within bounds with safe margins
+  x = Math.max(6, Math.min(94, x));
+  y = Math.max(8, Math.min(92, y));
+
+  // Multi-point organic local drift parameters derived strictly from participantId
+  const hAnim = hashString(participantId + "_anim");
+  const hDuration = hashString(participantId + "_dur");
+  const hDelay = hashString(participantId + "_del");
+  const hScale = hashString(participantId + "_scl");
+
+  // Pick one of 4 organic multi-point drift paths (1 to 4)
+  const animVariant = (hAnim % 4) + 1;
+  // Slow, calm duration between 5.5s and 8.8s
+  const duration = 5.5 + (hDuration % 34) / 10;
+  // Non-synchronized starting phase/delay (already mid-flight)
+  const delay = -((hDelay % 90) / 10);
+  // Subtle drift intensity multiplier (0.85 to 1.15) for natural organic variance
+  const driftScale = Number(((85 + (hScale % 31)) / 100).toFixed(2));
+
+  return { x, y, animVariant, duration, delay, driftScale };
+}
+
+function ParticipantAvatarCluster({ activeParticipants, quizId }) {
+  // Store persistent positions mapped by participantId so existing avatars never jump/reshuffle
+  const [positionsCache] = useState(() => new Map());
+  const [renderItems, setRenderItems] = useState([]);
+  const [exitTimers] = useState(() => new Map());
+
+  useEffect(() => {
+    // 1. Build a lookup of current active participant objects by ID
+    const activeMap = new Map();
+    activeParticipants.forEach((p) => {
+      activeMap.set(p.id, p);
+    });
+
+    // 2. Ensure every active participant has a stable position in cache
+    activeParticipants.forEach((p) => {
+      if (!positionsCache.has(p.id)) {
+        let bestPos = getStableParticipantPosition(p.id, 0);
+        let bestMinDist = 0;
+
+        // Deterministic collision avoidance using participantId iterations
+        for (let attempt = 0; attempt < 8; attempt++) {
+          const cand = getStableParticipantPosition(p.id, attempt);
+          let minDist = Infinity;
+          for (const [otherId, otherPos] of positionsCache.entries()) {
+            if (otherId === p.id) continue;
+            const dx = cand.x - otherPos.x;
+            const dy = (cand.y - otherPos.y) * 1.3;
+            const d = Math.hypot(dx, dy);
+            if (d < minDist) minDist = d;
+          }
+
+          if (minDist > 10) {
+            bestPos = cand;
+            break;
+          }
+          if (minDist > bestMinDist) {
+            bestMinDist = minDist;
+            bestPos = cand;
+          }
+        }
+
+        positionsCache.set(p.id, bestPos);
+      }
+    });
+
+    // 3. Update renderItems with enter/active/leave lifecycle
+    const frameId = requestAnimationFrame(() => {
+      setRenderItems((prevItems) => {
+        const prevMap = new Map(prevItems.map((item) => [item.id, item]));
+        const nextItems = [];
+
+        // A. Keep or add active participants
+        const isSingle = activeParticipants.length === 1;
+
+        activeParticipants.forEach((p) => {
+          const deterministicPos =
+            positionsCache.get(p.id) || getStableParticipantPosition(p.id, 0);
+          const pos = isSingle
+            ? { ...deterministicPos, x: 50, y: 50 }
+            : deterministicPos;
+          const existing = prevMap.get(p.id);
+
+          // Cancel any pending exit timer if reconnected
+          if (exitTimers.has(p.id)) {
+            clearTimeout(exitTimers.get(p.id));
+            exitTimers.delete(p.id);
+          }
+
+          if (existing) {
+            nextItems.push({
+              ...existing,
+              x: pos.x,
+              y: pos.y,
+              name: p.name,
+              avatar: p.avatar,
+              status: "active",
+            });
+          } else {
+            // New participant entering
+            nextItems.push({
+              id: p.id,
+              name: p.name,
+              avatar: p.avatar,
+              x: pos.x,
+              y: pos.y,
+              animVariant: pos.animVariant,
+              duration: pos.duration,
+              delay: pos.delay,
+              driftScale: pos.driftScale,
+              status: "entering",
+            });
+          }
+        });
+
+        // B. Identify leaving participants (in prevItems but no longer in activeParticipants)
+        prevItems.forEach((item) => {
+          if (!activeMap.has(item.id)) {
+            if (item.status !== "leaving") {
+              nextItems.push({
+                ...item,
+                status: "leaving",
+              });
+
+              // Set timer to cleanly remove after exit animation finishes (400ms)
+              const timerId = setTimeout(() => {
+                positionsCache.delete(item.id);
+                exitTimers.delete(item.id);
+                setRenderItems((curr) => curr.filter((c) => c.id !== item.id));
+              }, 400);
+
+              exitTimers.set(item.id, timerId);
+            } else {
+              // Already leaving, keep until timer removes it
+              nextItems.push(item);
+            }
+          }
+        });
+
+        return nextItems;
+      });
+    });
+
+    return () => cancelAnimationFrame(frameId);
+  }, [activeParticipants, positionsCache, exitTimers]);
+
+  // Promote 'entering' items to 'active' on next animation frame
+  useEffect(() => {
+    const hasEntering = renderItems.some((it) => it.status === "entering");
+    if (hasEntering) {
+      const animFrame = requestAnimationFrame(() => {
+        setRenderItems((curr) =>
+          curr.map((it) =>
+            it.status === "entering" ? { ...it, status: "active" } : it,
+          ),
+        );
+      });
+      return () => cancelAnimationFrame(animFrame);
+    }
+  }, [renderItems]);
+
+  const count = activeParticipants.length;
+
+  return (
+    <div className="avatar-cluster-section">
+      {count > 0 && (
+        <div className="avatar-cluster-header">
+          <div className="cluster-header-count">
+            {count === 1
+              ? "1 participant joined"
+              : `${count} participants joined`}
+          </div>
+        </div>
+      )}
+
+      <div className="avatar-cluster-stage">
+        {count === 0 && renderItems.length === 0 ? (
+          <div className="cluster-empty-state">
+            <div className="cluster-radar-pulse">
+              <span className="radar-ring r1"></span>
+              <span className="radar-ring r2"></span>
+              <span className="radar-icon">👥</span>
+            </div>
+            <p className="cluster-empty-title">
+              Waiting for participants to join...
+            </p>
+            <span className="cluster-empty-hint">
+              Share the quiz code above to let participants enter the room
+            </span>
+          </div>
+        ) : (
+          renderItems.map((item) => (
+            <div
+              key={item.id}
+              className={`avatar-cluster-node ${item.status}`}
+              style={{
+                left: `${item.x}%`,
+                top: `${item.y}%`,
+              }}
+              title={item.name}
+            >
+              <div
+                className={`avatar-floating-wrapper drift-v${item.animVariant || 1}`}
+                style={{
+                  animationDuration: `${item.duration}s`,
+                  animationDelay: `${item.delay}s`,
+                  "--drift-intensity": item.driftScale || 1,
+                }}
+              >
+                <div className="avatar-bubble">
+                  <span className="avatar-emoji">{item.avatar || "👤"}</span>
+                </div>
+              </div>
+            </div>
+          ))
+        )}
+        <LobbyReactionsOverlay quizId={quizId} />
+      </div>
+    </div>
+  );
+}
+
 function HostWaitingRoom({
   quizId,
   initialTitle,
@@ -1190,8 +1637,6 @@ function HostWaitingRoom({
   });
   const [loading, setLoading] = useState(Boolean(quizId));
   const [error, setError] = useState(quizId ? "" : "No quiz selected.");
-  const [showModal, setShowModal] = useState(false);
-  const [searchTerm, setSearchTerm] = useState("");
   const [isStarting, setIsStarting] = useState(false);
   const [copied, setCopied] = useState(false);
   const [toastMessage, setToastMessage] = useState("");
@@ -1334,10 +1779,6 @@ function HostWaitingRoom({
     }
   };
 
-  const filteredParticipants = activeParticipants.filter((p) =>
-    p.name.toLowerCase().includes(searchTerm.toLowerCase()),
-  );
-
   if (loading) {
     return (
       <div className="waiting-room-page">
@@ -1372,166 +1813,54 @@ function HostWaitingRoom({
         </button>
       </div>
 
-      <div className="waiting-room-card">
-        <div className="waiting-room-header">
-          <h1>{quizData.title}</h1>
-          {quizData.description && <p>{quizData.description}</p>}
-          <div className="waiting-room-status-wrap">
-            <span className={`quiz-status ${quizData.status}`}>
-              {quizData.status === "waiting"
-                ? "🟡 Waiting for participants"
-                : quizData.status === "live"
-                  ? "🟢 Live"
-                  : quizData.status === "finished"
-                    ? "⚫ Finished"
-                    : "📝 Draft"}
-            </span>
-          </div>
-        </div>
-
-        <div className="waiting-room-code-card">
-          <span className="code-label">SHARE QUIZ CODE</span>
-          <span className="code-value">{quizData.quizCode || "------"}</span>
-          <button className="copy-code-btn" onClick={handleCopyCode}>
-            {copied ? "✓ Copied to Clipboard" : "📋 Copy Code"}
-          </button>
-        </div>
-
-        <div className="waiting-room-counter-card">
-          <div className="counter-number">{activeParticipants.length}</div>
-          <div className="counter-label">
-            {activeParticipants.length === 1
-              ? "Participant Joined"
-              : "Participants Joined"}
-          </div>
-        </div>
-
-        <div className="waiting-room-actions">
-          <button
-            className="secondary-btn view-participants-btn"
-            onClick={() => setShowModal(true)}
-          >
-            👥 View Participants ({activeParticipants.length})
-          </button>
-
-          <button
-            className={`primary-btn start-quiz-btn ${
-              quizData.status === "live" ? "is-live" : ""
-            }`}
-            onClick={handleStartQuiz}
-            disabled={
-              isStarting ||
-              quizData.status !== "waiting" ||
-              activeParticipants.length === 0
-            }
-            title={
-              activeParticipants.length === 0
-                ? "Waiting for at least one participant to join"
-                : ""
-            }
-          >
-            {isStarting
-              ? "Starting..."
-              : quizData.status === "live"
-                ? "🟢 Quiz is Live (Active)"
-                : "🚀 Start Quiz"}
-          </button>
-
-          {quizData.status === "waiting" && activeParticipants.length === 0 && (
-            <p className="waiting-participant-hint">
-              Waiting for at least one participant...
-            </p>
-          )}
-        </div>
+      <div className="waiting-room-header">
+        <h1>{quizData.title}</h1>
+        {quizData.description && <p>{quizData.description}</p>}
       </div>
 
-      {showModal && (
-        <div className="dialog-overlay" onClick={() => setShowModal(false)}>
-          <div
-            className="dialog-box participants-modal"
-            onClick={(e) => e.stopPropagation()}
-          >
-            <div className="modal-header">
-              <div>
-                <h2>Joined Participants</h2>
-                <p className="modal-subtitle">
-                  {activeParticipants.length}{" "}
-                  {activeParticipants.length === 1
-                    ? "participant"
-                    : "participants"}{" "}
-                  in lobby
-                </p>
-              </div>
-              <button
-                className="modal-close-btn"
-                onClick={() => setShowModal(false)}
-              >
-                ✕
-              </button>
-            </div>
+      <div className="waiting-room-code-bar">
+        <span className="code-label">QUIZ CODE:</span>
+        <span className="code-value">{quizData.quizCode || "------"}</span>
+        <button className="copy-code-btn" onClick={handleCopyCode}>
+          {copied ? "✓ Copied" : "📋 Copy Code"}
+        </button>
+      </div>
 
-            <div className="participant-search-box">
-              <span className="search-icon">🔍</span>
-              <input
-                type="text"
-                placeholder="Search participant name..."
-                value={searchTerm}
-                onChange={(e) => setSearchTerm(e.target.value)}
-              />
-              {searchTerm && (
-                <button
-                  className="clear-search"
-                  onClick={() => setSearchTerm("")}
-                >
-                  ✕
-                </button>
-              )}
-            </div>
+      <ParticipantAvatarCluster
+        activeParticipants={activeParticipants}
+        quizId={quizId}
+      />
 
-            <div className="participants-scroll-list">
-              {activeParticipants.length === 0 ? (
-                <div className="modal-empty-state">
-                  <p>No participants have joined yet.</p>
-                  <span>Share the quiz code above to let them join!</span>
-                </div>
-              ) : filteredParticipants.length === 0 ? (
-                <div className="modal-empty-state">
-                  <p>No participants match &quot;{searchTerm}&quot;</p>
-                </div>
-              ) : (
-                <ul className="participant-items-list">
-                  {filteredParticipants.map((participant, index) => (
-                    <li
-                      key={participant.id || index}
-                      className="participant-item-row"
-                    >
-                      <span className="participant-index">#{index + 1}</span>
-                      {participant.avatar && (
-                        <span className="participant-avatar-icon">
-                          {participant.avatar}
-                        </span>
-                      )}
-                      <span className="participant-name">
-                        {participant.name}
-                      </span>
-                      <span className="participant-dot">●</span>
-                    </li>
-                  ))}
-                </ul>
-              )}
-            </div>
+      <div className="waiting-room-actions">
+        <button
+          className={`primary-btn start-quiz-btn ${
+            quizData.status === "live" ? "is-live" : ""
+          }`}
+          onClick={handleStartQuiz}
+          disabled={
+            isStarting ||
+            quizData.status !== "waiting" ||
+            activeParticipants.length === 0
+          }
+          title={
+            activeParticipants.length === 0
+              ? "Waiting for at least one participant to join"
+              : ""
+          }
+        >
+          {isStarting
+            ? "Starting..."
+            : quizData.status === "live"
+              ? "🟢 Quiz is Live (Active)"
+              : "🚀 Start Quiz"}
+        </button>
 
-            <div className="modal-footer">
-              <button
-                className="primary-btn modal-done-btn"
-                onClick={() => setShowModal(false)}
-              >
-                Close
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
+        {quizData.status === "waiting" && activeParticipants.length === 0 && (
+          <p className="waiting-participant-hint">
+            Waiting for at least one participant...
+          </p>
+        )}
+      </div>
 
       <Toast message={toastMessage} />
     </div>

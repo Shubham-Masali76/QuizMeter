@@ -1529,6 +1529,8 @@ button:hover {
   background: #f8fafc;
   display: flex;
   flex-direction: column;
+  position: relative;
+  overflow-x: hidden;
 }
 
 .participant-lobby-header {
@@ -1769,86 +1771,84 @@ button:hover {
    ========================= */
 
 .waiting-room-page {
-  max-width: 800px;
+  max-width: 960px;
   margin: 0 auto;
-  padding: 24px 20px;
+  padding: 20px 20px 48px;
 }
 
 .waiting-room-top-nav {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  margin-bottom: 24px;
-}
-
-.waiting-room-card {
-  background: white;
-  border-radius: 16px;
-  padding: 36px 32px;
-  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.06);
-  text-align: center;
-}
-
-.waiting-room-header h1 {
-  font-size: 1.9rem;
-  font-weight: 700;
-  color: #111827;
-  margin-bottom: 8px;
-}
-
-.waiting-room-header p {
-  font-size: 1rem;
-  color: #6b7280;
   margin-bottom: 16px;
 }
 
-.waiting-room-status-wrap {
-  display: inline-flex;
-  justify-content: center;
-  margin-bottom: 28px;
+.waiting-room-header {
+  text-align: center;
+  margin-bottom: 12px;
 }
 
-.waiting-room-code-card {
-  background: #f8fafc;
-  border: 2px dashed #cbd5e1;
-  border-radius: 14px;
-  padding: 22px 20px;
-  margin-bottom: 24px;
+.waiting-room-header h1 {
+  font-size: 1.95rem;
+  font-weight: 800;
+  color: #111827;
+  margin-bottom: 4px;
+}
+
+.waiting-room-header p {
+  font-size: 0.95rem;
+  color: #64748b;
+  max-width: 600px;
+  margin: 0 auto 8px;
+}
+
+.waiting-room-code-bar {
   display: flex;
-  flex-direction: column;
   align-items: center;
-  gap: 10px;
+  justify-content: center;
+  gap: 14px;
+  background: white;
+  border: 1.5px solid #e2e8f0;
+  border-radius: 9999px;
+  padding: 6px 14px 6px 20px;
+  margin: 0 auto 16px;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.04);
+  width: fit-content;
+  max-width: 90%;
 }
 
 .code-label {
-  font-size: 0.8rem;
+  font-size: 0.75rem;
   font-weight: 700;
-  letter-spacing: 1.5px;
+  letter-spacing: 0.08em;
   color: #64748b;
   text-transform: uppercase;
+  white-space: nowrap;
 }
 
 .code-value {
   font-family: monospace, monospace;
-  font-size: 2.5rem;
+  font-size: 1.5rem;
   font-weight: 800;
-  letter-spacing: 6px;
+  letter-spacing: 4px;
   color: #1e293b;
+  line-height: 1;
 }
 
 .copy-code-btn {
-  background: white;
+  background: #f8fafc;
   color: #4f46e5;
   border: 1px solid #c7d2fe;
-  border-radius: 8px;
-  padding: 8px 18px;
-  font-size: 0.9rem;
+  border-radius: 9999px;
+  padding: 6px 14px;
+  font-size: 0.82rem;
   font-weight: 600;
   cursor: pointer;
   display: inline-flex;
   align-items: center;
-  gap: 6px;
+  gap: 5px;
   transition: 0.2s;
+  white-space: nowrap;
 }
 
 .copy-code-btn:hover {
@@ -1857,54 +1857,410 @@ button:hover {
   transform: translateY(-1px);
 }
 
-.waiting-room-counter-card {
-  background: linear-gradient(135deg, #eef2ff 0%, #f5f3ff 100%);
-  border: 1px solid #e0e7ff;
-  border-radius: 14px;
-  padding: 26px 20px;
-  margin-bottom: 28px;
+/* =========================
+   HOST WAITING ROOM: AVATAR CLUSTER (PHASE 3)
+   ========================= */
+
+.avatar-cluster-section {
+  margin: 0 auto 20px;
+  width: 100%;
 }
 
-.counter-number {
-  font-size: 3.4rem;
-  font-weight: 800;
+.avatar-cluster-header {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  margin-bottom: 12px;
+}
+
+.cluster-header-count {
+  background: #e0e7ff;
   color: #4338ca;
-  line-height: 1.1;
-  margin-bottom: 6px;
+  font-size: 0.82rem;
+  font-weight: 700;
+  padding: 3px 12px;
+  border-radius: 9999px;
+  letter-spacing: 0.02em;
 }
 
-.counter-label {
-  font-size: 1rem;
-  font-weight: 600;
-  color: #6366f1;
-  text-transform: uppercase;
-  letter-spacing: 1px;
+/* Open natural stage without any card borders, card backgrounds, or artificial box shadows */
+.avatar-cluster-stage {
+  position: relative;
+  width: 100%;
+  height: 480px;
+  min-height: 440px;
+  background: transparent;
+  border: none;
+  border-radius: 0;
+  overflow: visible;
 }
+
+/* Cluster Empty State */
+.cluster-empty-state {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  text-align: center;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  padding: 20px;
+  width: 90%;
+  max-width: 360px;
+  z-index: 1;
+}
+
+.cluster-radar-pulse {
+  position: relative;
+  width: 64px;
+  height: 64px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  margin-bottom: 14px;
+}
+
+.radar-ring {
+  position: absolute;
+  border-radius: 50%;
+  border: 2px solid #818cf8;
+  opacity: 0;
+  animation: radarWave 2.8s infinite cubic-bezier(0.21, 0.53, 0.56, 0.8);
+}
+
+.radar-ring.r1 {
+  width: 100%;
+  height: 100%;
+  animation-delay: 0s;
+}
+
+.radar-ring.r2 {
+  width: 100%;
+  height: 100%;
+  animation-delay: 1.4s;
+}
+
+@keyframes radarWave {
+  0% {
+    transform: scale(0.4);
+    opacity: 0.8;
+  }
+  70% {
+    transform: scale(1.6);
+    opacity: 0.2;
+  }
+  100% {
+    transform: scale(2.1);
+    opacity: 0;
+  }
+}
+
+.radar-icon {
+  font-size: 2rem;
+  z-index: 2;
+}
+
+.cluster-empty-title {
+  font-size: 1.05rem;
+  font-weight: 700;
+  color: #334155;
+  margin-bottom: 4px;
+}
+
+.cluster-empty-hint {
+  font-size: 0.86rem;
+  color: #64748b;
+  line-height: 1.4;
+}
+
+/* Avatar Node Positioning & Entrance/Exit */
+.avatar-cluster-node {
+  position: absolute;
+  transform: translate(-50%, -50%);
+  transform-origin: center center;
+  transition:
+    opacity 0.4s ease-out,
+    transform 0.4s cubic-bezier(0.34, 1.56, 0.64, 1),
+    left 0.6s cubic-bezier(0.34, 1.56, 0.64, 1),
+    top 0.6s cubic-bezier(0.34, 1.56, 0.64, 1);
+  z-index: 2;
+  user-select: none;
+  cursor: default;
+}
+
+.avatar-cluster-node.entering {
+  opacity: 0;
+  transform: translate(-50%, -50%) scale(0.2);
+}
+
+.avatar-cluster-node.active {
+  opacity: 1;
+  transform: translate(-50%, -50%) scale(1);
+}
+
+.avatar-cluster-node.leaving {
+  opacity: 0;
+  transform: translate(-50%, -50%) scale(0.3);
+  pointer-events: none;
+}
+
+/* ===================================================
+   Organic Multi-Point Floating Animations (Local Drift)
+   =================================================== */
+
+@keyframes avatarDrift1 {
+  0% {
+    transform: translate3d(0px, 0px, 0) rotate(0deg);
+  }
+  20% {
+    transform: translate3d(
+        calc(13px * var(--drift-intensity, 1)),
+        calc(-9px * var(--drift-intensity, 1)),
+        0
+      )
+      rotate(1.4deg);
+  }
+  45% {
+    transform: translate3d(
+        calc(-11px * var(--drift-intensity, 1)),
+        calc(-13px * var(--drift-intensity, 1)),
+        0
+      )
+      rotate(-1.6deg);
+  }
+  70% {
+    transform: translate3d(
+        calc(14px * var(--drift-intensity, 1)),
+        calc(10px * var(--drift-intensity, 1)),
+        0
+      )
+      rotate(1.2deg);
+  }
+  85% {
+    transform: translate3d(
+        calc(-7px * var(--drift-intensity, 1)),
+        calc(6px * var(--drift-intensity, 1)),
+        0
+      )
+      rotate(-0.8deg);
+  }
+  100% {
+    transform: translate3d(0px, 0px, 0) rotate(0deg);
+  }
+}
+
+@keyframes avatarDrift2 {
+  0% {
+    transform: translate3d(0px, 0px, 0) rotate(0deg);
+  }
+  22% {
+    transform: translate3d(
+        calc(-14px * var(--drift-intensity, 1)),
+        calc(-8px * var(--drift-intensity, 1)),
+        0
+      )
+      rotate(-1.8deg);
+  }
+  48% {
+    transform: translate3d(
+        calc(10px * var(--drift-intensity, 1)),
+        calc(-12px * var(--drift-intensity, 1)),
+        0
+      )
+      rotate(1.6deg);
+  }
+  72% {
+    transform: translate3d(
+        calc(-12px * var(--drift-intensity, 1)),
+        calc(11px * var(--drift-intensity, 1)),
+        0
+      )
+      rotate(-1.2deg);
+  }
+  88% {
+    transform: translate3d(
+        calc(8px * var(--drift-intensity, 1)),
+        calc(5px * var(--drift-intensity, 1)),
+        0
+      )
+      rotate(0.9deg);
+  }
+  100% {
+    transform: translate3d(0px, 0px, 0) rotate(0deg);
+  }
+}
+
+@keyframes avatarDrift3 {
+  0% {
+    transform: translate3d(0px, 0px, 0) rotate(0deg);
+  }
+  24% {
+    transform: translate3d(
+        calc(15px * var(--drift-intensity, 1)),
+        calc(8px * var(--drift-intensity, 1)),
+        0
+      )
+      rotate(1.9deg);
+  }
+  46% {
+    transform: translate3d(
+        calc(-8px * var(--drift-intensity, 1)),
+        calc(13px * var(--drift-intensity, 1)),
+        0
+      )
+      rotate(-1.3deg);
+  }
+  70% {
+    transform: translate3d(
+        calc(-13px * var(--drift-intensity, 1)),
+        calc(-10px * var(--drift-intensity, 1)),
+        0
+      )
+      rotate(-2deg);
+  }
+  88% {
+    transform: translate3d(
+        calc(7px * var(--drift-intensity, 1)),
+        calc(-6px * var(--drift-intensity, 1)),
+        0
+      )
+      rotate(1deg);
+  }
+  100% {
+    transform: translate3d(0px, 0px, 0) rotate(0deg);
+  }
+}
+
+@keyframes avatarDrift4 {
+  0% {
+    transform: translate3d(0px, 0px, 0) rotate(0deg);
+  }
+  26% {
+    transform: translate3d(
+        calc(-11px * var(--drift-intensity, 1)),
+        calc(12px * var(--drift-intensity, 1)),
+        0
+      )
+      rotate(-1.5deg);
+  }
+  50% {
+    transform: translate3d(
+        calc(13px * var(--drift-intensity, 1)),
+        calc(-11px * var(--drift-intensity, 1)),
+        0
+      )
+      rotate(2.1deg);
+  }
+  74% {
+    transform: translate3d(
+        calc(12px * var(--drift-intensity, 1)),
+        calc(9px * var(--drift-intensity, 1)),
+        0
+      )
+      rotate(1deg);
+  }
+  90% {
+    transform: translate3d(
+        calc(-6px * var(--drift-intensity, 1)),
+        calc(-7px * var(--drift-intensity, 1)),
+        0
+      )
+      rotate(-1.1deg);
+  }
+  100% {
+    transform: translate3d(0px, 0px, 0) rotate(0deg);
+  }
+}
+
+.avatar-floating-wrapper {
+  animation-iteration-count: infinite;
+  animation-timing-function: cubic-bezier(0.45, 0.05, 0.55, 0.95);
+  will-change: transform;
+}
+
+.avatar-floating-wrapper.drift-v1 {
+  animation-name: avatarDrift1;
+}
+
+.avatar-floating-wrapper.drift-v2 {
+  animation-name: avatarDrift2;
+}
+
+.avatar-floating-wrapper.drift-v3 {
+  animation-name: avatarDrift3;
+}
+
+.avatar-floating-wrapper.drift-v4 {
+  animation-name: avatarDrift4;
+}
+
+/* The circular avatar bubble */
+/* Participant Avatar Emoji & Floating Presentation */
+.avatar-bubble {
+  width: 54px;
+  height: 54px;
+  border-radius: 50%;
+  background: linear-gradient(145deg, #ffffff 0%, #f5f3ff 100%);
+  border: 2px solid #e0e7ff;
+  box-shadow:
+    0 6px 18px rgba(79, 70, 229, 0.14),
+    inset 0 1px 1px rgba(255, 255, 255, 0.9);
+  display: flex;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  transition:
+    transform 0.25s cubic-bezier(0.34, 1.56, 0.64, 1),
+    box-shadow 0.25s ease,
+    border-color 0.25s ease;
+  background: transparent;
+  border: none;
+  border-radius: 0;
+  box-shadow: none;
+  cursor: default;
+  transition: transform 0.25s cubic-bezier(0.34, 1.56, 0.64, 1);
+}
+
+.avatar-emoji {
+  font-size: 28px;
+  font-size: 50px;
+  line-height: 1;
+  filter: drop-shadow(0 2px 4px rgba(0, 0, 0, 0.08));
+  display: inline-block;
+  filter: drop-shadow(0 4px 10px rgba(0, 0, 0, 0.16))
+    drop-shadow(0 1px 3px rgba(0, 0, 0, 0.1));
+  user-select: none;
+  transition:
+    transform 0.25s cubic-bezier(0.34, 1.56, 0.64, 1),
+    filter 0.25s ease;
+}
+
+.avatar-cluster-node:hover .avatar-bubble {
+  transform: scale(1.22);
+  border-color: #818cf8;
+  box-shadow: 0 12px 28px rgba(99, 102, 241, 0.25);
+  transform: scale(1.24);
+  z-index: 10;
+}
+
+.avatar-cluster-node:hover .avatar-emoji {
+  filter: drop-shadow(0 8px 18px rgba(99, 102, 241, 0.35))
+    drop-shadow(0 2px 6px rgba(0, 0, 0, 0.18));
+}
+
+/* =========================
+   HOST WAITING ROOM: ACTIONS
+   ========================= */
 
 .waiting-room-actions {
   display: flex;
   flex-direction: column;
-  gap: 14px;
-  align-items: center;
+  gap: 12px;
   max-width: 420px;
   margin: 0 auto;
-}
-
-.view-participants-btn {
+  align-items: center;
   width: 100%;
-  padding: 12px 20px;
-  font-size: 1rem;
-  font-weight: 600;
-  background: white;
-  color: #374151;
-  border: 1px solid #d1d5db;
-  border-radius: 10px;
-}
-
-.view-participants-btn:hover {
-  background: #f9fafb;
-  border-color: #9ca3af;
-  transform: translateY(-1px);
 }
 
 .start-quiz-btn {
@@ -1917,6 +2273,8 @@ button:hover {
   border: none;
   border-radius: 10px;
   box-shadow: 0 4px 12px rgba(5, 150, 105, 0.25);
+  cursor: pointer;
+  transition: 0.2s;
 }
 
 .start-quiz-btn:hover {
@@ -1942,12 +2300,15 @@ button:hover {
   color: #64748b;
   margin-top: 2px;
   font-weight: 500;
+  text-align: center;
 }
 
 .waiting-room-loading,
 .waiting-room-error {
   text-align: center;
   padding: 60px 20px;
+  max-width: 600px;
+  margin: 40px auto;
   background: white;
   border-radius: 16px;
   box-shadow: 0 4px 20px rgba(0, 0, 0, 0.06);
@@ -1959,182 +2320,47 @@ button:hover {
   font-size: 1.05rem;
 }
 
-/* =========================
-   PARTICIPANTS MODAL
-   ========================= */
-
-.dialog-box.participants-modal {
-  max-width: 520px;
-  width: 92%;
-  max-height: 85vh;
-  display: flex;
-  flex-direction: column;
-  padding: 24px;
-  border-radius: 16px;
-  text-align: left;
+@media (max-width: 768px) {
+  .waiting-room-page {
+    padding: 16px 14px 40px;
+  }
+  .waiting-room-header h1 {
+    font-size: 1.7rem;
+  }
+  .avatar-cluster-stage {
+    height: 400px;
+    min-height: 360px;
+  }
+  .avatar-emoji {
+    font-size: 44px;
+  }
 }
 
-.modal-header {
-  display: flex;
-  justify-content: space-between;
-  align-items: flex-start;
-  margin-bottom: 18px;
-}
-
-.modal-header h2 {
-  font-size: 1.35rem;
-  font-weight: 700;
-  color: #111827;
-  margin: 0;
-}
-
-.modal-subtitle {
-  font-size: 0.88rem;
-  color: #6b7280;
-  margin-top: 2px;
-}
-
-.modal-close-btn {
-  background: none;
-  border: none;
-  font-size: 1.25rem;
-  color: #9ca3af;
-  cursor: pointer;
-  padding: 4px 8px;
-  border-radius: 6px;
-}
-
-.modal-close-btn:hover {
-  color: #111827;
-  background: #f3f4f6;
-  transform: none;
-}
-
-.participant-search-box {
-  position: relative;
-  display: flex;
-  align-items: center;
-  margin-bottom: 16px;
-}
-
-.participant-search-box input {
-  width: 100%;
-  padding: 10px 36px 10px 36px;
-  border: 1px solid #d1d5db;
-  border-radius: 8px;
-  font-size: 0.95rem;
-  font-family: inherit;
-}
-
-.participant-search-box input:focus {
-  outline: none;
-  border-color: #4f46e5;
-  box-shadow: 0 0 0 3px rgba(79, 70, 229, 0.1);
-}
-
-.participant-search-box .search-icon {
-  position: absolute;
-  left: 12px;
-  font-size: 0.9rem;
-  color: #94a3b8;
-  pointer-events: none;
-}
-
-.participant-search-box .clear-search {
-  position: absolute;
-  right: 10px;
-  background: none;
-  border: none;
-  color: #94a3b8;
-  font-size: 0.85rem;
-  cursor: pointer;
-  padding: 4px;
-}
-
-.participant-search-box .clear-search:hover {
-  color: #1f2937;
-  transform: none;
-}
-
-.participants-scroll-list {
-  flex: 1;
-  overflow-y: auto;
-  max-height: 320px;
-  border: 1px solid #f1f5f9;
-  border-radius: 10px;
-  background: #fafafa;
-  padding: 8px;
-}
-
-.participant-items-list {
-  list-style: none;
-  display: flex;
-  flex-direction: column;
-  gap: 6px;
-  padding: 0;
-  margin: 0;
-}
-
-.participant-item-row {
-  display: flex;
-  align-items: center;
-  gap: 12px;
-  padding: 10px 14px;
-  background: white;
-  border-radius: 8px;
-  border: 1px solid #f1f5f9;
-}
-
-.participant-index {
-  font-size: 0.85rem;
-  font-weight: 700;
-  color: #94a3b8;
-  min-width: 32px;
-}
-
-.participant-avatar-icon {
-  font-size: 1.25rem;
-  line-height: 1;
-  margin-right: 4px;
-}
-
-.participant-name {
-  flex: 1;
-  font-size: 0.95rem;
-  font-weight: 600;
-  color: #1f2937;
-  word-break: break-word;
-}
-
-.participant-dot {
-  color: #10b981;
-  font-size: 0.75rem;
-}
-
-.modal-empty-state {
-  text-align: center;
-  padding: 36px 16px;
-  color: #6b7280;
-}
-
-.modal-empty-state p {
-  font-weight: 600;
-  margin-bottom: 4px;
-}
-
-.modal-empty-state span {
-  font-size: 0.85rem;
-  color: #9ca3af;
-}
-
-.modal-footer {
-  margin-top: 18px;
-  display: flex;
-  justify-content: flex-end;
-}
-
-.modal-done-btn {
-  padding: 9px 22px;
+@media (max-width: 480px) {
+  .waiting-room-code-bar {
+    gap: 8px;
+    padding: 6px 10px 6px 14px;
+  }
+  .code-value {
+    font-size: 1.25rem;
+    letter-spacing: 2px;
+  }
+  .copy-code-btn {
+    padding: 5px 10px;
+    font-size: 0.78rem;
+  }
+  .avatar-cluster-stage {
+    height: 340px;
+    min-height: 300px;
+  }
+  .avatar-bubble {
+    width: 46px;
+    height: 46px;
+  }
+  .avatar-emoji {
+    font-size: 24px;
+    font-size: 38px;
+  }
 }
 
 /* =========================
@@ -2155,4 +2381,272 @@ button:hover {
   margin-top: 6px;
   font-size: 0.95rem;
   color: #4f46e5;
+}
+
+/* ==========================================================================
+   PHASE 4: REAL-TIME LOBBY REACTIONS & FLOATING OVERLAY
+   ========================================================================== */
+
+/* Reaction Bar Container */
+.lobby-reaction-bar-container {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  margin: 20px 0 22px;
+  position: relative;
+  z-index: 10;
+}
+
+.lobby-reaction-bar-label {
+  font-size: 0.76rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: #64748b;
+  margin-bottom: 8px;
+}
+
+.lobby-reaction-bar {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  background: #f8fafc;
+  border: 1px solid #e2e8f0;
+  border-radius: 9999px;
+  padding: 6px 12px;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.04);
+  position: relative;
+  overflow: hidden;
+  transition: all 0.2s ease;
+}
+
+.lobby-reaction-bar:not(.is-cooling):hover {
+  background: #ffffff;
+  border-color: #cbd5e1;
+  box-shadow: 0 4px 14px rgba(99, 102, 241, 0.1);
+}
+
+.reaction-btn {
+  background: transparent;
+  border: none;
+  width: 44px;
+  height: 44px;
+  min-width: 44px;
+  min-height: 44px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  padding: 0;
+  transition:
+    transform 0.15s cubic-bezier(0.34, 1.56, 0.64, 1),
+    background-color 0.15s ease;
+  user-select: none;
+  -webkit-tap-highlight-color: transparent;
+}
+
+.reaction-emoji {
+  font-size: 1.55rem;
+  line-height: 1;
+  transition: transform 0.15s ease;
+}
+
+.reaction-btn:not(:disabled):hover {
+  background: #eef2ff;
+  transform: scale(1.18);
+}
+
+.reaction-btn:not(:disabled):hover .reaction-emoji {
+  transform: scale(1.08);
+}
+
+.reaction-btn:not(:disabled):active {
+  transform: scale(0.92);
+}
+
+.reaction-btn:disabled {
+  opacity: 0.42;
+  cursor: not-allowed;
+  transform: none !important;
+  filter: grayscale(20%);
+}
+
+/* Cooldown progress indicator */
+.reaction-cooldown-track {
+  position: absolute;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  height: 3px;
+  background: transparent;
+  pointer-events: none;
+  overflow: hidden;
+}
+
+.lobby-reaction-bar.is-cooling .reaction-cooldown-fill {
+  height: 100%;
+  background: linear-gradient(90deg, #6366f1, #a855f7);
+  animation: cooldownDrain 2s linear forwards;
+}
+
+@keyframes cooldownDrain {
+  0% {
+    width: 100%;
+    opacity: 1;
+  }
+  90% {
+    opacity: 1;
+  }
+  100% {
+    width: 0%;
+    opacity: 0.3;
+  }
+}
+
+.reaction-cooldown-hint {
+  font-size: 0.72rem;
+  font-weight: 600;
+  color: #94a3b8;
+  margin-top: 5px;
+  animation: fadeIn 0.2s ease;
+}
+
+/* Real-time Floating Reactions Overlay */
+.lobby-reactions-overlay {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  overflow: hidden;
+  z-index: 30;
+}
+
+.floating-reaction {
+  position: absolute;
+  bottom: 12px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  user-select: none;
+  pointer-events: none;
+  will-change: transform, opacity;
+  animation-timing-function: cubic-bezier(0.25, 0.46, 0.45, 0.94);
+  animation-fill-mode: forwards;
+}
+
+.floating-reaction-emoji {
+  font-size: 2.6rem;
+  line-height: 1;
+  filter: drop-shadow(0 4px 10px rgba(0, 0, 0, 0.14));
+}
+
+/* Animation Variant 1: gentle float with subtle right drift */
+.floating-reaction.variant-1 {
+  animation-name: reactionFloatV1;
+}
+
+@keyframes reactionFloatV1 {
+  0% {
+    opacity: 0;
+    transform: translate3d(0, 30px, 0) scale(0.6) rotate(0deg);
+  }
+  12% {
+    opacity: 1;
+    transform: translate3d(calc(var(--drift-x) * 0.25), -20px, 0)
+      scale(var(--reaction-scale)) rotate(var(--reaction-rot));
+  }
+  55% {
+    opacity: 0.95;
+    transform: translate3d(calc(var(--drift-x) * 0.75), -220px, 0)
+      scale(calc(var(--reaction-scale) * 1.05))
+      rotate(calc(var(--reaction-rot) * -0.5));
+  }
+  85% {
+    opacity: 0.45;
+  }
+  100% {
+    opacity: 0;
+    transform: translate3d(var(--drift-x), -430px, 0)
+      scale(calc(var(--reaction-scale) * 0.9)) rotate(var(--reaction-rot));
+  }
+}
+
+/* Animation Variant 2: buoyant float with slight wave swing */
+.floating-reaction.variant-2 {
+  animation-name: reactionFloatV2;
+}
+
+@keyframes reactionFloatV2 {
+  0% {
+    opacity: 0;
+    transform: translate3d(0, 30px, 0) scale(0.55)
+      rotate(calc(var(--reaction-rot) * -1));
+  }
+  14% {
+    opacity: 1;
+    transform: translate3d(calc(var(--drift-x) * -0.35), -25px, 0)
+      scale(var(--reaction-scale)) rotate(0deg);
+  }
+  50% {
+    opacity: 0.95;
+    transform: translate3d(calc(var(--drift-x) * 0.6), -200px, 0)
+      scale(var(--reaction-scale)) rotate(var(--reaction-rot));
+  }
+  82% {
+    opacity: 0.45;
+  }
+  100% {
+    opacity: 0;
+    transform: translate3d(var(--drift-x), -440px, 0)
+      scale(calc(var(--reaction-scale) * 0.85))
+      rotate(calc(var(--reaction-rot) * 1.3));
+  }
+}
+
+/* Animation Variant 3: energetic burst then smooth drift */
+.floating-reaction.variant-3 {
+  animation-name: reactionFloatV3;
+}
+
+@keyframes reactionFloatV3 {
+  0% {
+    opacity: 0;
+    transform: translate3d(0, 30px, 0) scale(0.65) rotate(0deg);
+  }
+  10% {
+    opacity: 1;
+    transform: translate3d(calc(var(--drift-x) * 0.2), -35px, 0)
+      scale(calc(var(--reaction-scale) * 1.12)) rotate(var(--reaction-rot));
+  }
+  52% {
+    opacity: 0.92;
+    transform: translate3d(calc(var(--drift-x) * 0.7), -210px, 0)
+      scale(var(--reaction-scale)) rotate(calc(var(--reaction-rot) * -0.8));
+  }
+  80% {
+    opacity: 0.5;
+  }
+  100% {
+    opacity: 0;
+    transform: translate3d(var(--drift-x), -420px, 0)
+      scale(calc(var(--reaction-scale) * 0.85)) rotate(0deg);
+  }
+}
+
+/* Responsive reaction emoji adjustments */
+@media (max-width: 640px) {
+  .floating-reaction-emoji {
+    font-size: 2.1rem;
+  }
+  .reaction-btn {
+    width: 44px;
+    height: 44px;
+  }
+  .reaction-emoji {
+    font-size: 1.4rem;
+  }
+  .lobby-reaction-bar {
+    gap: 6px;
+    padding: 5px 8px;
+  }
 }
